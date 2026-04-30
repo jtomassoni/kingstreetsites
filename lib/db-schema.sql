@@ -85,6 +85,21 @@ create table if not exists settings (
   updated_at timestamptz not null default now()
 );
 
+-- Prospector run tracking
+create table if not exists prospector_runs (
+  id uuid primary key default gen_random_uuid(),
+  zip text not null,
+  metro text not null,
+  status text not null default 'running' check (status in ('running','complete','failed')),
+  total int not null default 0,
+  processed int not null default 0,
+  inserted int not null default 0,
+  current_business text,
+  error text,
+  started_at timestamptz not null default now(),
+  finished_at timestamptz
+);
+
 -- Seed default settings
 insert into settings (key, value) values
   ('external_comms', 'false'),
