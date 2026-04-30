@@ -1,5 +1,6 @@
 import { Pool } from "pg";
 import Link from "next/link";
+import ProspectorButton from "./prospector-button";
 
 const TIER_COLOR: Record<string, string> = {
   A: "text-teal-400 bg-teal-400/10",
@@ -8,7 +9,7 @@ const TIER_COLOR: Record<string, string> = {
   reject: "text-red-400 bg-red-400/10",
 };
 
-async function getLeads(tier?: string, status?: string) {
+async function getLeads(tier?: string, status?: string, sort?: string) {
   const pool = new Pool({ connectionString: process.env.DATABASE_URL });
   try {
     const conditions: string[] = [];
@@ -16,10 +17,17 @@ async function getLeads(tier?: string, status?: string) {
     if (tier) { conditions.push(`tier = $${values.length + 1}`); values.push(tier); }
     if (status) { conditions.push(`status = $${values.length + 1}`); values.push(status); }
     const where = conditions.length ? `where ${conditions.join(" and ")}` : "";
+
+    const orderCol = sort === "viability" ? "business_viability"
+      : sort === "pain" ? "web_pain"
+      : "opportunity_score";
+
     const { rows } = await pool.query(
-      `select id, business_name, metro, zip, cuisine, tier, status, opportunity_score, google_rating, google_review_count, created_at
+      `select id, business_name, metro, zip, cuisine, tier, status,
+              opportunity_score, business_viability, web_pain,
+              google_rating, google_review_count, created_at
        from leads ${where}
-       order by opportunity_score desc nulls last, created_at desc
+       order by ${orderCol} desc nulls last, created_at desc
        limit 200`,
       values
     );
@@ -32,10 +40,16 @@ async function getLeads(tier?: string, status?: string) {
 export default async function LeadsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ tier?: string; status?: string }>;
+  searchParams: Promise<{ tier?: string; status?: string; sort?: string }>;
 }) {
-  const { tier, status } = await searchParams;
-  const leads = await getLeads(tier, status);
+  const { tier, status, sort } = await searchParams;
+  const leads = await getLeads(tier, status, sort);
+
+  const SORT_OPTS = [
+    { key: "score", label: "Opportunity" },
+    { key: "viability", label: "Viability" },
+    { key: "pain", label: "Web Pain" },
+  ];
 
   return (
     <div className="max-w-5xl">
@@ -44,27 +58,41 @@ export default async function LeadsPage({
         <span className="text-sm text-slate-500">{leads.length} results</span>
       </div>
 
-      {/* Filters */}
-      <div className="flex gap-2 mb-6 flex-wrap">
+      {/* Prospector trigger */}
+      <ProspectorButton />
+
+      {/* Filters + sort */}
+      <div className="flex flex-wrap gap-2 mb-6 mt-4">
+        <span className="text-xs text-slate-500 self-center">Tier:</span>
         {["A", "B", "C"].map((t) => (
           <Link
             key={t}
-            href={`/app/leads?tier=${t}`}
+            href={`/app/leads?tier=${t}${sort ? `&sort=${sort}` : ""}`}
             className={`rounded-full px-3 py-1 text-xs font-semibold border transition-colors ${tier === t ? "bg-teal-600 border-teal-600 text-white" : "border-white/10 text-slate-400 hover:text-white"}`}
           >
             Tier {t}
           </Link>
         ))}
-        {tier || status ? (
-          <Link href="/app/leads" className="rounded-full px-3 py-1 text-xs border border-white/10 text-slate-500 hover:text-white">
+        <span className="text-xs text-slate-500 self-center ml-4">Sort:</span>
+        {SORT_OPTS.map((o) => (
+          <Link
+            key={o.key}
+            href={`/app/leads?sort=${o.key}${tier ? `&tier=${tier}` : ""}`}
+            className={`rounded-full px-3 py-1 text-xs font-semibold border transition-colors ${(sort ?? "score") === o.key ? "bg-slate-700 border-slate-600 text-white" : "border-white/10 text-slate-400 hover:text-white"}`}
+          >
+            {o.label}
+          </Link>
+        ))}
+        {(tier || status) && (
+          <Link href="/app/leads" className="rounded-full px-3 py-1 text-xs border border-white/10 text-slate-500 hover:text-white ml-2">
             Clear
           </Link>
-        ) : null}
+        )}
       </div>
 
       {leads.length === 0 ? (
         <div className="rounded-xl border border-white/10 bg-slate-900/60 p-10 text-center">
-          <p className="text-slate-400">No leads yet. Run the Prospector to populate this list.</p>
+          <p className="text-slate-400">No leads yet. Run the Prospector above to populate this list.</p>
         </div>
       ) : (
         <div className="rounded-xl border border-white/10 overflow-hidden">
@@ -74,23 +102,19 @@ export default async function LeadsPage({
                 <th className="text-left px-4 py-3 text-xs uppercase tracking-widest text-slate-500 font-semibold">Business</th>
                 <th className="text-left px-4 py-3 text-xs uppercase tracking-widest text-slate-500 font-semibold">Location</th>
                 <th className="text-left px-4 py-3 text-xs uppercase tracking-widest text-slate-500 font-semibold">Tier</th>
-                <th className="text-left px-4 py-3 text-xs uppercase tracking-widest text-slate-500 font-semibold">Score</th>
-                <th className="text-left px-4 py-3 text-xs uppercase tracking-widest text-slate-500 font-semibold">Status</th>
+                <th className="text-left px-4 py-3 text-xs uppercase tracking-widest text-slate-500 font-semibold">Opp</th>
+                <th className="text-left px-4 py-3 text-xs uppercase tracking-widest text-slate-500 font-semibold">Viab</th>
+                <th className="text-left px-4 py-3 text-xs uppercase tracking-widest text-slate-500 font-semibold">Pain</th>
                 <th className="text-left px-4 py-3 text-xs uppercase tracking-widest text-slate-500 font-semibold">Rating</th>
+                <th className="text-left px-4 py-3 text-xs uppercase tracking-widest text-slate-500 font-semibold">Status</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-white/5">
               {leads.map((lead: {
-                id: string;
-                business_name: string;
-                metro: string;
-                zip: string;
-                cuisine: string;
-                tier: string;
-                status: string;
-                opportunity_score: number;
-                google_rating: number;
-                google_review_count: number;
+                id: string; business_name: string; metro: string; zip: string;
+                cuisine: string; tier: string; status: string;
+                opportunity_score: number; business_viability: number; web_pain: number;
+                google_rating: number; google_review_count: number;
               }) => (
                 <tr key={lead.id} className="hover:bg-white/5 transition-colors">
                   <td className="px-4 py-3">
@@ -107,11 +131,13 @@ export default async function LeadsPage({
                       </span>
                     )}
                   </td>
-                  <td className="px-4 py-3 text-slate-300 font-mono">{lead.opportunity_score ?? "—"}</td>
-                  <td className="px-4 py-3 text-slate-400 capitalize">{lead.status}</td>
+                  <td className="px-4 py-3 text-white font-mono font-semibold">{lead.opportunity_score ?? "—"}</td>
+                  <td className="px-4 py-3 text-slate-400 font-mono">{lead.business_viability ?? "—"}</td>
+                  <td className="px-4 py-3 text-slate-400 font-mono">{lead.web_pain ?? "—"}</td>
                   <td className="px-4 py-3 text-slate-400">
                     {lead.google_rating ? `${lead.google_rating} (${lead.google_review_count})` : "—"}
                   </td>
+                  <td className="px-4 py-3 text-slate-400 capitalize">{lead.status}</td>
                 </tr>
               ))}
             </tbody>
