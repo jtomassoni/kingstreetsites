@@ -1,10 +1,13 @@
 import NextAuth from "next-auth";
 import PostgresAdapter from "@auth/pg-adapter";
 import ResendProvider from "next-auth/providers/resend";
+import Credentials from "next-auth/providers/credentials";
+import FacebookProvider from "next-auth/providers/facebook";
 import { Pool } from "pg";
 import authConfig from "./auth.config";
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+const hasMetaOAuth = Boolean(process.env.AUTH_FACEBOOK_ID && process.env.AUTH_FACEBOOK_SECRET);
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   ...authConfig,
@@ -12,6 +15,19 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   session: { strategy: "jwt" },
   trustHost: true,
   providers: [
+    ...(process.env.NODE_ENV === "development"
+      ? [
+          Credentials({
+            id: "dev",
+            name: "Dev shortcut",
+            credentials: {},
+            async authorize() {
+              const email = process.env.CONTACT_TO_EMAIL ?? "jtomassoni@gmail.com";
+              return { id: "dev", name: "JT", email };
+            },
+          }),
+        ]
+      : []),
     ResendProvider({
       from: process.env.AUTH_FROM_EMAIL ?? "onboarding@resend.dev",
       sendVerificationRequest: async ({ identifier, url, provider }) => {
@@ -29,5 +45,29 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         });
       },
     }),
+    ...(hasMetaOAuth
+      ? [
+          FacebookProvider({
+            clientId: process.env.AUTH_FACEBOOK_ID as string,
+            clientSecret: process.env.AUTH_FACEBOOK_SECRET as string,
+            authorization: {
+              params: {
+                scope: "email public_profile",
+              },
+            },
+          }),
+          FacebookProvider({
+            id: "instagram",
+            name: "Instagram (Meta)",
+            clientId: process.env.AUTH_FACEBOOK_ID as string,
+            clientSecret: process.env.AUTH_FACEBOOK_SECRET as string,
+            authorization: {
+              params: {
+                scope: "email public_profile instagram_basic pages_show_list",
+              },
+            },
+          }),
+        ]
+      : []),
   ],
 });

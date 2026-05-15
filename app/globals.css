@@ -8,11 +8,123 @@ html {
 
 body {
   margin: 0;
-  font-family: Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+  font-family: var(--font-dm-sans), ui-sans-serif, system-ui, sans-serif;
+  background: #faf8f5;
+  color: #0c1222;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ── App shell (CRM) ───────────────────────────────────────── */
+body.app-shell {
   background: #020617;
   color: #e2e8f0;
 }
 
-.section {
-  @apply mx-auto w-full max-w-6xl px-4 py-16 md:py-20;
+.lead-status-select option {
+  background-color: #1e293b;
+  color: #f1f5f9;
+}
+
+@keyframes pipeline-indeterminate {
+  0% {
+    transform: translateX(-60%);
+  }
+  100% {
+    transform: translateX(220%);
+  }
+}
+
+.animate-pipeline-indeterminate {
+  animation: pipeline-indeterminate 1.35s ease-in-out infinite;
+}
+
+/* ── Marketing site ───────────────────────────────────────── */
+@layer components {
+  .section {
+    @apply mx-auto w-full max-w-6xl px-5 sm:px-6 lg:px-8;
+  }
+
+  .section-pad {
+    @apply py-20 md:py-28;
+  }
+
+  .eyebrow {
+    @apply text-xs font-semibold uppercase tracking-[0.22em] text-brand;
+  }
+
+  .heading-display {
+    @apply font-serif text-4xl sm:text-5xl md:text-6xl lg:text-[3.5rem] leading-[1.08] tracking-tight text-ink;
+  }
+
+  .heading-section {
+    @apply font-serif text-3xl sm:text-4xl md:text-[2.75rem] leading-tight tracking-tight text-ink;
+  }
+
+  .body-lg {
+    @apply text-lg sm:text-xl text-ink-muted leading-relaxed;
+  }
+
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 rounded-full bg-ink px-7 py-3.5 text-sm font-semibold text-cream shadow-card transition-all duration-200 hover:bg-ink/90 hover:shadow-card-hover hover:-translate-y-0.5 active:translate-y-0;
+  }
+
+  .btn-secondary {
+    @apply inline-flex items-center justify-center gap-2 rounded-full border border-ink/15 bg-white/80 px-7 py-3.5 text-sm font-semibold text-ink backdrop-blur-sm transition-all duration-200 hover:border-ink/25 hover:bg-white hover:shadow-card;
+  }
+
+  .btn-ghost {
+    @apply inline-flex items-center justify-center gap-2 rounded-full px-5 py-2.5 text-sm font-medium text-ink-muted transition-colors hover:text-ink;
+  }
+
+  .card-surface {
+    @apply rounded-2xl border border-ink/[0.06] bg-white shadow-card transition-all duration-300;
+  }
+
+  .card-surface:hover {
+    @apply shadow-card-hover -translate-y-1;
+  }
+
+  .text-gradient {
+    @apply bg-gradient-to-r from-brand-dark via-brand to-brand-light bg-clip-text text-transparent;
+  }
+}
+
+@layer utilities {
+  .stagger-1 {
+    animation-delay: 0.1s;
+  }
+  .stagger-2 {
+    animation-delay: 0.2s;
+  }
+  .stagger-3 {
+    animation-delay: 0.3s;
+  }
+  .stagger-4 {
+    animation-delay: 0.4s;
+  }
+  .stagger-5 {
+    animation-delay: 0.5s;
+  }
+
+  .animate-on-load {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  .animate-fade-up,
+  .animate-fade-in,
+  .animate-float,
+  .animate-shimmer {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+  .animate-on-load {
+    opacity: 1;
+  }
 }

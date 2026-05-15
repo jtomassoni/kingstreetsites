@@ -19,7 +19,29 @@ export async function GET(
       [runId]
     );
     if (!rows[0]) return NextResponse.json({ error: "Not found" }, { status: 404 });
-    return NextResponse.json(rows[0]);
+    const run = rows[0];
+
+    const eventsResult = await pool.query(
+      `select action, payload, created_at
+       from audit_log
+       where agent = 'prospector'
+         and (
+           payload->>'run_id' = $1
+           or (
+             payload->>'zip' = $2
+             and payload->>'metro' = $3
+             and created_at >= $4
+           )
+         )
+       order by created_at desc
+       limit 10`,
+      [runId, run.zip, run.metro, run.started_at]
+    );
+
+    return NextResponse.json({
+      ...run,
+      events: eventsResult.rows,
+    });
   } finally {
     await pool.end();
   }

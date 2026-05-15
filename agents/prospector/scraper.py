@@ -1,4 +1,6 @@
 """Playwright-based site scraper: screenshot + DOM signals."""
+from __future__ import annotations
+
 import asyncio
 import os
 import subprocess
@@ -12,6 +14,45 @@ ORDERING_KEYWORDS = ["order online", "order now", "doordash", "grubhub", "uberea
 RESERVATION_KEYWORDS = ["reserve", "reservation", "book a table", "opentable",
                          "resy", "yelp reservations", "sevenrooms"]
 SOCIAL_PATTERNS = ["instagram.com", "facebook.com", "twitter.com", "x.com", "tiktok.com"]
+SOCIAL_ACTIVITY_HINTS = [
+    "h ago", "hour ago", "hours ago", "d ago", "day ago", "days ago",
+    "w ago", "week ago", "weeks ago", "yesterday", "today"
+]
+
+# Same-origin-ish paths that usually mean an HTML menu (not a PDF-only flow).
+_MENU_PATH_MARKERS = (
+    "/menu", "/menus", "/our-menu", "/dinner-menu", "/lunch-menu", "/brunch-menu",
+    "/food", "/eat", "/dining", "/brunch", "/wine-list", "/cocktails", "/beer-wine",
+)
+
+
+def _link_suggests_html_menu(href: str) -> bool:
+    if not href or not isinstance(href, str):
+        return False
+    low = href.lower().split("?", 1)[0].split("#", 1)[0]
+    if low.startswith(("mailto:", "tel:", "javascript:")):
+        return False
+    if ".pdf" in low:
+        return False
+    if any(m in low for m in _MENU_PATH_MARKERS):
+        return True
+    # e.g. .../menu.html or trailing /menu
+    tail = low.rstrip("/").split("/")[-1]
+    return tail in ("menu", "menus", "food", "dining", "eat")
+
+
+def _is_recent_social_activity(content: str) -> bool:
+    low = content.lower()
+    return any(hint in low for hint in SOCIAL_ACTIVITY_HINTS)
+
+async def _check_social_activity(page, url: str) -> bool | None:
+    try:
+        await page.goto(url, wait_until="domcontentloaded", timeout=15000)
+        await page.wait_for_timeout(1500)
+        content = await page.content()
+        return _is_recent_social_activity(content)
+    except Exception:
+        return None
 
 async def scrape_site(url: str, screenshot_dir: str, slug: str) -> dict:
     """Visit a URL with Playwright, take screenshot, extract DOM signals."""
@@ -22,7 +63,10 @@ async def scrape_site(url: str, screenshot_dir: str, slug: str) -> dict:
         "has_reservation": False,
         "social_links": [],
         "has_contact_form": False,
+        "has_html_menu_nav": False,
         "menu_is_pdf": False,
+        "instagram_active_recently": None,
+        "facebook_active_recently": None,
         "screenshot_path": None,
         "load_error": None,
     }
@@ -44,20 +88,44 @@ async def scrape_site(url: str, screenshot_dir: str, slug: str) -> dict:
             result["has_ordering"] = any(kw in content for kw in ORDERING_KEYWORDS)
             result["has_reservation"] = any(kw in content for kw in RESERVATION_KEYWORDS)
             result["has_contact_form"] = bool(await page.query_selector("form"))
-            result["menu_is_pdf"] = ".pdf" in content and "menu" in content
 
-            # Social links
+            # Social links + menu heuristics (avoid ".pdf" anywhere in HTML + "menu" — huge false positives on CMS sites).
             links = await page.eval_on_selector_all(
                 "a[href]", "els => els.map(e => e.href)"
             )
+            result["has_html_menu_nav"] = any(_link_suggests_html_menu(l) for l in links if l)
+            pdf_menu_anchor = await page.evaluate(
+                """() => {
+                  const as = Array.from(document.querySelectorAll('a[href]'));
+                  return as.some(a => {
+                    const href = (a.getAttribute('href') || '').toLowerCase();
+                    if (!href.includes('.pdf')) return false;
+                    const text = (a.textContent || '').toLowerCase();
+                    const hrefMenu = /(menu|menus|wine|drink|beer|cocktail|food|dinner|lunch|brunch)/.test(href);
+                    const textMenu = /(menu|wine list|drink|dinner|lunch|brunch|download)/.test(text);
+                    return hrefMenu || textMenu;
+                  });
+                }"""
+            )
+            # PDF menu is a negative signal only if we do not see a normal HTML menu route in links.
+            result["menu_is_pdf"] = bool(pdf_menu_anchor) and not result["has_html_menu_nav"]
+
             result["social_links"] = [
                 l for l in links if any(s in l for s in SOCIAL_PATTERNS)
             ]
 
-            # Screenshot
+            # Screenshot of the business site before any social navigation.
             screenshot_path = os.path.join(screenshot_dir, f"{slug}.png")
             await page.screenshot(path=screenshot_path, full_page=False)
             result["screenshot_path"] = screenshot_path
+
+            # Best-effort activity check for linked Instagram/Facebook pages.
+            instagram_link = next((l for l in result["social_links"] if "instagram.com" in l), None)
+            facebook_link = next((l for l in result["social_links"] if "facebook.com" in l), None)
+            if instagram_link:
+                result["instagram_active_recently"] = await _check_social_activity(page, instagram_link)
+            if facebook_link:
+                result["facebook_active_recently"] = await _check_social_activity(page, facebook_link)
 
         except Exception as e:
             result["load_error"] = str(e)

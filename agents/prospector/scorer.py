@@ -1,5 +1,29 @@
 """Scoring logic per architecture.md rubric."""
 
+import re
+
+
+BAR_KEYWORDS = {
+    "bar", "tavern", "pub", "saloon", "lounge", "grill", "inn", "roadhouse",
+}
+
+# Higher-competition / polished Denver core pockets to down-rank slightly.
+HIGH_COMPETITION_ZIPS = {"80202", "80205", "80211"}
+
+
+def _extract_zip(place: dict) -> str:
+    address = place.get("formatted_address") or ""
+    match = re.search(r"\b(\d{5})(?:-\d{4})?\b", address)
+    return match.group(1) if match else ""
+
+
+def _is_neighborhood_bar_fit(place: dict) -> bool:
+    name = (place.get("name") or "").lower()
+    types = set(place.get("types") or [])
+    has_bar_type = "bar" in types
+    has_bar_keyword = any(k in name for k in BAR_KEYWORDS)
+    return has_bar_type or has_bar_keyword
+
 def business_viability(place: dict) -> tuple[int, list[str]]:
     """Return (score 0-100, list of hard-kill reasons)."""
     kills = []
@@ -31,10 +55,20 @@ def business_viability(place: dict) -> tuple[int, list[str]]:
     # Independent (not a chain) — already filtered upstream, add bonus
     score += 15
 
+    # Target owner-operated neighborhood bars/grills.
+    if _is_neighborhood_bar_fit(place):
+        score += 10
+
+    # Budget-fit proxy: established but not massive brands.
+    if 15 <= ratings <= 250:
+        score += 8
+
     # Social links on website (from scrape)
     scrape = place.get("_scrape", {})
     if scrape.get("social_links"):
         score += 10
+    if scrape.get("instagram_active_recently") or scrape.get("facebook_active_recently"):
+        score += 8
 
     # Placeholder for: ≥1 review in last 30 days (15pts), in biz ≥2yr (10pts),
     # active social (15pts) — requires deeper data not in Places basic fields
@@ -44,7 +78,25 @@ def business_viability(place: dict) -> tuple[int, list[str]]:
     elif ratings >= 30:
         score += 8
 
-    return min(score, 100), kills
+    # De-prioritize polished high-competition districts and higher-end profiles.
+    zip_code = _extract_zip(place)
+    if zip_code in HIGH_COMPETITION_ZIPS:
+        score -= 12
+
+    if (place.get("price_level") or 0) >= 3:
+        score -= 8
+
+    scrape = place.get("_scrape", {})
+    perf = scrape.get("performance")
+    if (
+        scrape.get("reachable")
+        and (perf is not None and perf >= 80)
+        and scrape.get("has_ordering")
+        and scrape.get("has_reservation")
+    ):
+        score -= 10
+
+    return max(0, min(score, 100)), kills
 
 
 def web_pain(place: dict) -> int:
@@ -53,6 +105,9 @@ def web_pain(place: dict) -> int:
     score = 0
 
     if not place.get("website"):
+        # No website is a strong opening for local bars/grills.
+        if _is_neighborhood_bar_fit(place):
+            return 90
         return 75  # No website at all = high pain
 
     if not scrape.get("reachable"):

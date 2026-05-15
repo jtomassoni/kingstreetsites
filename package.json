@@ -6,7 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint . --ext .ts,.tsx"
+    "lint": "eslint . --ext .ts,.tsx",
+    "migrate": "node scripts/psql-with-env.mjs lib/db-migrate-scrape-analyze.sql",
+    "reset": "node scripts/psql-with-env.mjs lib/db-reset-dev.sql"
   },
   "dependencies": {
     "@auth/pg-adapter": "^1.11.2",

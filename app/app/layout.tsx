@@ -14,9 +14,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   if (!session) redirect("/login");
 
   return (
-    <div className="min-h-screen bg-slate-950 flex">
+    <div className="flex min-h-screen bg-gradient-to-br from-[#06080f] via-slate-950 to-[#0b0d12]">
       {/* Sidebar */}
-      <aside className="w-56 shrink-0 border-r border-white/10 flex flex-col py-6 px-4 gap-1">
+      <aside className="flex w-56 shrink-0 flex-col gap-1 border-r border-white/[0.07] bg-slate-950/85 py-6 px-4 shadow-[4px_0_24px_-8px_rgba(0,0,0,0.5)] backdrop-blur-sm">
         <p className="text-xs font-semibold uppercase tracking-[0.18em] text-teal-400 px-2 mb-4">King Street Sites</p>
         {NAV.map((item) => (
           <Link
@@ -42,8 +42,22 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         </div>
       </aside>
 
-      {/* Main */}
-      <main className="flex-1 overflow-auto p-8">{children}</main>
+      {/* Main — layered wash so the canvas is not flat navy */}
+      <main className="relative flex-1 overflow-auto p-5 md:p-8">
+        <div
+          className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_110%_70%_at_50%_-15%,rgba(45,212,191,0.09),transparent_52%)]"
+          aria-hidden
+        />
+        <div
+          className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_70%_55%_at_100%_30%,rgba(139,92,246,0.06),transparent_50%)]"
+          aria-hidden
+        />
+        <div
+          className="pointer-events-none absolute inset-0 bg-[linear-gradient(to_bottom,rgba(255,255,255,0.02)_0px,transparent_32rem)]"
+          aria-hidden
+        />
+        <div className="relative z-10">{children}</div>
+      </main>
     </div>
   );
 }

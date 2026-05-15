@@ -1,12 +1,17 @@
 #!/usr/bin/env python3
 """
-Prospector v0 — finds and scores restaurants in a ZIP code.
-Usage: python3 main.py <zip_code> [<metro_name>] [<run_id>]
+Prospector (scrape) — discover restaurants via Google Places and upsert thin leads.
+Scores and website screenshots are handled by agents/analyzer/main.py.
+
+Usage: python3 main.py <zip_code|ALL> [<metro_name>] [<run_id>]
 """
+from __future__ import annotations
+
 import sys
 import os
-import json
+import re
 from pathlib import Path
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # Load .env from project root
 project_root = Path(__file__).parent.parent.parent
@@ -18,155 +23,216 @@ if env_path.exists():
             k, _, v = line.partition("=")
             os.environ.setdefault(k.strip(), v.strip())
 
-from places import search_restaurants, get_place_details, is_chain
-from scraper import scrape
-from scorer import business_viability, web_pain, opportunity_score, assign_tier
-from db import get_conn, upsert_lead, log_audit
+from places import search_restaurants, get_place_details, is_chain, get_zips_for_metro
+from db import get_conn, upsert_scrape_lead, log_audit
 
 
 def update_run(conn, run_id: str, **kwargs):
+    """Persist run progress. psycopg2 requires a cursor."""
     if not run_id:
         return
     sets = ", ".join(f"{k} = %({k})s" for k in kwargs)
-    conn.execute(f"update prospector_runs set {sets} where id = %(run_id)s",
-                 {**kwargs, "run_id": run_id})
+    sql = f"update prospector_runs set {sets} where id = %(run_id)s"
+    params = {**kwargs, "run_id": run_id}
+    with conn.cursor() as cur:
+        cur.execute(sql, params)
     conn.commit()
 
 
+def fail_run(conn, run_id: str, message: str):
+    if not run_id:
+        return
+    with conn.cursor() as cur:
+        cur.execute(
+            "update prospector_runs set status = 'failed', error = %s, finished_at = now() where id = %s",
+            (message[:2000], run_id),
+        )
+    conn.commit()
+
+
+def _extract_zip(address: str | None) -> str:
+    if not address:
+        return ""
+    match = re.search(r"\b(\d{5})(?:-\d{4})?\b", address)
+    return match.group(1) if match else ""
+
+
+def _cuisine_from_types(types: list | None) -> str | None:
+    if not types:
+        return None
+    return next(
+        (t.replace("_", " ").title() for t in types
+         if t not in ("restaurant", "food", "point_of_interest", "establishment", "store")),
+        None,
+    )
+
+
 def run(zip_code: str, metro: str, run_id: str = ""):
-    api_key = os.environ["GOOGLE_PLACES_API_KEY"]
-    db_url = os.environ["DATABASE_URL"]
     screenshot_dir = str(Path(__file__).parent / "screenshots")
     os.makedirs(screenshot_dir, exist_ok=True)
 
-    print(f"[prospector] Starting run: ZIP={zip_code} metro={metro} run_id={run_id or 'none'}")
+    print(f"[prospector] Scrape run: ZIP={zip_code} metro={metro} run_id={run_id or 'none'}")
+
+    try:
+        db_url = os.environ["DATABASE_URL"]
+    except KeyError:
+        print("[prospector] FATAL: DATABASE_URL is not set")
+        sys.exit(1)
 
     conn = get_conn(db_url)
 
     try:
-        print("[prospector] Searching Google Places...")
-        raw_places = search_restaurants(zip_code, api_key)
-        total = len(raw_places)
-        print(f"[prospector] Found {total} raw results")
+        api_key = os.environ["GOOGLE_PLACES_API_KEY"]
 
+        if run_id:
+            update_run(conn, run_id, current_business="Worker started — fetching places from Google…")
+
+        target_zips = [zip_code]
+        if zip_code.upper() == "ALL":
+            target_zips = get_zips_for_metro(metro)
+            if not target_zips:
+                raise ValueError(f"No configured ZIPs for metro '{metro}'")
+
+        print(f"[prospector] Searching Google Places for {len(target_zips)} ZIP(s)...")
+        seen_place_ids = set()
+        raw_places = []
+        for zi, target_zip in enumerate(target_zips):
+            if run_id:
+                update_run(
+                    conn,
+                    run_id,
+                    current_business=f"Google Places: ZIP {target_zip} ({zi + 1}/{len(target_zips)})…",
+                )
+            zip_places = search_restaurants(target_zip, api_key)
+            for place in zip_places:
+                pid = place.get("place_id")
+                if not pid or pid in seen_place_ids:
+                    continue
+                seen_place_ids.add(pid)
+                raw_places.append(place)
+
+        total_raw = len(raw_places)
+        print(f"[prospector] Found {total_raw} raw results")
+
+        candidates = []
+        for i, place in enumerate(raw_places):
+            name = place.get("name", "")
+            if is_chain(name):
+                print(f"  [{i+1}/{total_raw}] SKIP (chain): {name}")
+                continue
+            candidates.append((i, place))
+
+        total = len(candidates)
         if run_id:
             with conn.cursor() as cur:
                 cur.execute(
                     "update prospector_runs set total = %s, status = 'running' where id = %s",
-                    (total, run_id)
+                    (total, run_id),
                 )
             conn.commit()
 
-        log_audit(conn, "prospector_run_start", {"zip": zip_code, "metro": metro, "raw_count": total})
+        log_audit(
+            conn,
+            "prospector_run_start",
+            {
+                "run_id": run_id,
+                "zip": zip_code,
+                "metro": metro,
+                "raw_count": total_raw,
+                "candidate_count": total,
+                "target_zips": target_zips,
+                "mode": "scrape_only",
+            },
+        )
         conn.commit()
 
-        scored = []
-
-        for i, place in enumerate(raw_places):
+        def fetch_details(index: int, place: dict) -> tuple[bool, dict | None, str]:
             name = place.get("name", "")
             place_id = place.get("place_id", "")
-
-            if is_chain(name):
-                print(f"  [{i+1}/{total}] SKIP (chain): {name}")
-                if run_id:
-                    with conn.cursor() as cur:
-                        cur.execute(
-                            "update prospector_runs set processed = %s where id = %s",
-                            (i + 1, run_id)
-                        )
-                    conn.commit()
-                continue
-
-            print(f"  [{i+1}/{total}] Processing: {name}")
-
-            if run_id:
-                with conn.cursor() as cur:
-                    cur.execute(
-                        "update prospector_runs set processed = %s, current_business = %s where id = %s",
-                        (i + 1, name, run_id)
-                    )
-                conn.commit()
-
-            details = get_place_details(place_id, api_key)
-            if details.get("business_status") != "OPERATIONAL":
-                print(f"    → not operational, skipping")
-                continue
-
-            website = details.get("website")
-            slug = place_id.replace("ChIJ", "")[:20]
-
-            scrape_data = {}
-            if website:
-                print(f"    → scraping {website}")
-                try:
-                    scrape_data = scrape(website, screenshot_dir, slug)
-                except Exception as e:
-                    print(f"    → scrape error: {e}")
-
-            details["_scrape"] = scrape_data
-
-            viability, kills = business_viability(details)
-            if kills:
-                print(f"    → hard kill: {kills}")
-                continue
-
-            pain = web_pain(details)
-            opp = opportunity_score(viability, pain)
-
-            types = details.get("types", [])
-            cuisine = next((t.replace("_", " ").title() for t in types
-                            if t not in ("restaurant", "food", "point_of_interest",
-                                         "establishment", "store")), None)
-
-            scored.append({
-                "place_id": place_id,
-                "name": name,
-                "viability": viability,
-                "pain": pain,
-                "opp": opp,
-                "details": details,
-                "scrape": scrape_data,
-                "cuisine": cuisine,
-            })
-
-        print(f"\n[prospector] Scored {len(scored)} leads. Assigning tiers...")
-        all_opps = [s["opp"] for s in scored]
-
-        inserted = 0
-        for s in scored:
-            tier = assign_tier(s["opp"], all_opps)
-            d = s["details"]
-            sc = s["scrape"]
-
-            lead = {
-                "metro": metro,
-                "zip": zip_code,
-                "google_place_id": s["place_id"],
-                "business_name": s["name"],
-                "address": d.get("formatted_address"),
-                "phone": d.get("formatted_phone_number"),
-                "website_url": d.get("website"),
-                "cuisine": s["cuisine"],
-                "google_review_count": d.get("user_ratings_total"),
-                "google_rating": d.get("rating"),
-                "business_viability": s["viability"],
-                "web_pain": s["pain"],
-                "opportunity_score": s["opp"],
-                "tier": tier,
-                "current_screenshot_url": sc.get("screenshot_path"),
-            }
-
             try:
-                upsert_lead(conn, lead)
-                inserted += 1
+                details = get_place_details(place_id, api_key)
+                if details.get("business_status") != "OPERATIONAL":
+                    return False, None, f"[{index+1}/{total_raw}] {name}: not operational"
+                types = details.get("types") or []
+                cuisine = _cuisine_from_types(types)
+                lead = {
+                    "metro": metro,
+                    "zip": _extract_zip(details.get("formatted_address")) or zip_code,
+                    "google_place_id": place_id,
+                    "business_name": name,
+                    "address": details.get("formatted_address"),
+                    "phone": details.get("formatted_phone_number"),
+                    "website_url": details.get("website"),
+                    "cuisine": cuisine,
+                    "google_review_count": details.get("user_ratings_total"),
+                    "google_rating": details.get("rating"),
+                    "place_types": types,
+                }
+                return True, lead, f"[{index+1}/{total_raw}] {name}: saved"
             except Exception as e:
-                print(f"  DB error for {s['name']}: {e}")
-                conn.rollback()
+                return False, None, f"[{index+1}/{total_raw}] {name}: error {e}"
+
+        max_workers = int(os.environ.get("PROSPECTOR_MAX_WORKERS", "4"))
+        batch_size = int(os.environ.get("PROSPECTOR_BATCH_SIZE", str(max_workers * 3)))
+        total_batches = max(1, (len(candidates) + batch_size - 1) // batch_size)
+
+        processed = 0
+        inserted = 0
+
+        for batch_idx in range(total_batches):
+            batch_start = batch_idx * batch_size
+            batch = candidates[batch_start:batch_start + batch_size]
+            if not batch:
                 continue
+
+            batch_label = (
+                f"Batch {batch_idx + 1}/{total_batches} "
+                f"({batch_start + 1}-{batch_start + len(batch)} of {len(candidates)} places)"
+            )
+            print(f"[prospector] {batch_label}")
+            update_run(conn, run_id, current_business=batch_label)
+            log_audit(conn, "prospector_batch_start", {
+                "run_id": run_id,
+                "zip": zip_code,
+                "metro": metro,
+                "batch_index": batch_idx + 1,
+                "total_batches": total_batches,
+                "batch_size": len(batch),
+                "max_workers": max_workers,
+            })
+            conn.commit()
+
+            with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                futures = [executor.submit(fetch_details, idx, place) for idx, place in batch]
+                for future in as_completed(futures):
+                    ok, lead_dict, message = future.result()
+                    processed += 1
+                    print(f"  {message}")
+                    if ok and lead_dict:
+                        upsert_scrape_lead(conn, lead_dict)
+                        inserted += 1
+                    update_run(conn, run_id, processed=processed, current_business=message)
+
+            log_audit(conn, "prospector_batch_complete", {
+                "run_id": run_id,
+                "zip": zip_code,
+                "metro": metro,
+                "batch_index": batch_idx + 1,
+                "total_batches": total_batches,
+                "processed": processed,
+                "inserted_so_far": inserted,
+            })
+            conn.commit()
 
         log_audit(conn, "prospector_run_complete", {
-            "zip": zip_code, "metro": metro,
-            "raw": total, "scored": len(scored), "inserted": inserted,
+            "run_id": run_id,
+            "zip": zip_code,
+            "metro": metro,
+            "target_zips": target_zips,
+            "raw": total_raw,
+            "candidates": total,
+            "upserted": inserted,
+            "mode": "scrape_only",
         })
 
         if run_id:
@@ -176,30 +242,18 @@ def run(zip_code: str, metro: str, run_id: str = ""):
                        set status = 'complete', inserted = %s, processed = %s,
                            current_business = null, finished_at = now()
                        where id = %s""",
-                    (inserted, total, run_id)
+                    (inserted, processed, run_id),
                 )
-
         conn.commit()
         conn.close()
 
-        tier_counts: dict = {}
-        for s in scored:
-            t = assign_tier(s["opp"], all_opps)
-            tier_counts[t] = tier_counts.get(t, 0) + 1
-
-        print(f"\n[prospector] Done. {inserted} leads upserted.")
-        print(f"  Tier breakdown: {tier_counts}")
+        print(f"\n[prospector] Done. {inserted} leads upserted (queued for analysis).")
 
     except Exception as e:
         print(f"[prospector] FATAL: {e}")
         if run_id:
             try:
-                with conn.cursor() as cur:
-                    cur.execute(
-                        "update prospector_runs set status = 'failed', error = %s, finished_at = now() where id = %s",
-                        (str(e), run_id)
-                    )
-                conn.commit()
+                fail_run(conn, run_id, str(e))
             except Exception:
                 pass
         raise
@@ -207,7 +261,7 @@ def run(zip_code: str, metro: str, run_id: str = ""):
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        print("Usage: python3 main.py <zip_code> [<metro>] [<run_id>]")
+        print("Usage: python3 main.py <zip_code|ALL> [<metro>] [<run_id>]")
         sys.exit(1)
     zip_code = sys.argv[1]
     metro = sys.argv[2] if len(sys.argv) > 2 else "Denver"

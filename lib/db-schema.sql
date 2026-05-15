@@ -54,10 +54,22 @@ create table leads (
   cuisine text,
   google_review_count int,
   google_rating numeric(3,1),
+  place_types text[],
+  site_grade text check (site_grade in ('A','B','C','F')),
+  pitch_angle text,
+  looks_modern boolean,
+  mobile_ready boolean,
+  accessibility_ok boolean,
+  has_online_ordering boolean,
+  has_reservations boolean,
+  has_real_menu boolean,
   business_viability int,
   web_pain int,
   opportunity_score int,
   tier text check (tier in ('A','B','C','reject')),
+  analysis_status text not null default 'pending' check (analysis_status in ('pending','complete','failed')),
+  analysis_error text,
+  analyzed_at timestamptz,
   status text not null default 'new' check (status in ('new','staged','reached_out','clicked','replied','closed_won','closed_lost')),
   current_screenshot_url text,
   spec_screenshot_url text,
@@ -98,6 +110,66 @@ create table if not exists prospector_runs (
   error text,
   started_at timestamptz not null default now(),
   finished_at timestamptz
+);
+
+-- Analyzer run tracking (website scrape + scoring on existing leads)
+create table if not exists analyzer_runs (
+  id uuid primary key default gen_random_uuid(),
+  zip text not null default 'ALL',
+  metro text not null default 'ALL',
+  status text not null default 'running' check (status in ('running','complete','failed')),
+  total int not null default 0,
+  processed int not null default 0,
+  inserted int not null default 0,
+  current_business text,
+  error text,
+  started_at timestamptz not null default now(),
+  finished_at timestamptz
+);
+
+-- Social account connection state used by Prospector
+create table if not exists social_connections (
+  owner_email text not null,
+  platform text not null check (platform in ('instagram', 'facebook')),
+  connected boolean not null default false,
+  account_label text,
+  connected_at timestamptz,
+  updated_at timestamptz not null default now(),
+  primary key (owner_email, platform)
+);
+
+-- Outreach module
+create table if not exists lead_notes (
+  id uuid primary key default gen_random_uuid(),
+  lead_id uuid not null references leads(id) on delete cascade,
+  note text not null,
+  created_by text,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists lead_messages (
+  id uuid primary key default gen_random_uuid(),
+  lead_id uuid not null references leads(id) on delete cascade,
+  direction text not null check (direction in ('outbound','inbound')),
+  channel text not null default 'email' check (channel in ('email')),
+  from_email text,
+  to_email text,
+  subject text,
+  body_text text,
+  body_html text,
+  provider text,
+  provider_message_id text,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists lead_timeline_events (
+  id uuid primary key default gen_random_uuid(),
+  lead_id uuid not null references leads(id) on delete cascade,
+  event_type text not null,
+  title text not null,
+  body text,
+  metadata jsonb,
+  created_at timestamptz not null default now()
 );
 
 -- Seed default settings
