@@ -1,5 +1,11 @@
 node_modules
 .next
+.env
 .env.local
 dist
 npm-debug.log*
+.DS_Store
+.claude/
+agents/prospector/screenshots/
+**/*.log
+tsconfig.tsbuildinfo
