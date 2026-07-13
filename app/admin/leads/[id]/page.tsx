@@ -1,11 +1,19 @@
-import { Pool } from "pg";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import fs from "fs";
 import StatusSelect from "../components/status-select";
-import OutreachPanel from "../components/outreach-panel";
+import ConversationThread from "../components/conversation-thread";
+import NotesPanel from "../components/notes-panel";
+import ContactEmailField from "../components/contact-email-field";
+import BillingPanel, { type InvoiceRow } from "../components/billing-panel";
+import ActivityLog from "../components/activity-log";
 import { LeadStatus } from "@/lib/lead-status";
+import { ensureLeadCrmSchema } from "@/lib/lead-schema";
+import { ensureOutreachSchema } from "@/lib/outreach-schema";
+import { ensureBillingSchema } from "@/lib/billing";
+import { dbPool } from "@/lib/db";
+import type { ConversationMessage } from "../components/conversation-thread";
 
 const TIER_COLOR: Record<string, string> = {
   A: "text-teal-400 bg-teal-400/10 border-teal-400/20",
@@ -15,19 +23,31 @@ const TIER_COLOR: Record<string, string> = {
 };
 
 async function getLead(id: string) {
-  const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+  await ensureLeadCrmSchema(dbPool);
+  const { rows } = await dbPool.query(`select * from leads where id = $1`, [id]);
+  return rows[0] ?? null;
+}
+
+async function getLeadMessages(id: string) {
+  await ensureOutreachSchema(dbPool);
   try {
-    const { rows } = await pool.query(`select * from leads where id = $1`, [id]);
-    return rows[0] ?? null;
-  } finally {
-    await pool.end();
+    const { rows } = await dbPool.query(
+      `select id, direction, from_email, to_email, subject, body_text, created_at
+       from lead_messages
+       where lead_id = $1
+       order by created_at asc`,
+      [id]
+    );
+    return rows;
+  } catch {
+    return [];
   }
 }
 
 async function getLeadTimeline(id: string) {
-  const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+  await ensureOutreachSchema(dbPool);
   try {
-    const { rows } = await pool.query(
+    const { rows } = await dbPool.query(
       `
       select * from (
         select
@@ -39,6 +59,7 @@ async function getLeadTimeline(id: string) {
           created_at
         from lead_timeline_events
         where lead_id = $1
+          and event_type not in ('email_sent', 'email_received')
 
         union all
 
@@ -51,22 +72,6 @@ async function getLeadTimeline(id: string) {
           created_at
         from lead_notes
         where lead_id = $1
-
-        union all
-
-        select
-          id::text,
-          'message'::text as source,
-          case when direction = 'inbound' then 'email_received' else 'email_sent' end as event_type,
-          case when direction = 'inbound' then 'Reply received' else 'Email sent' end as title,
-          concat_ws(
-            E'\\n',
-            coalesce(subject, '(no subject)'),
-            coalesce(body_text, '')
-          ) as body,
-          created_at
-        from lead_messages
-        where lead_id = $1
       ) events
       order by created_at desc
       limit 100
@@ -76,8 +81,23 @@ async function getLeadTimeline(id: string) {
     return rows;
   } catch {
     return [];
-  } finally {
-    await pool.end();
+  }
+}
+
+async function getLeadInvoices(id: string) {
+  await ensureBillingSchema(dbPool);
+  try {
+    const { rows } = await dbPool.query(
+      `select i.*,
+              coalesce((select sum(p.amount_cents) from invoice_payments p where p.invoice_id = i.id), 0)::int as paid_cents
+       from invoices i
+       where i.lead_id = $1
+       order by i.created_at desc`,
+      [id]
+    );
+    return rows;
+  } catch {
+    return [];
   }
 }
 
@@ -113,19 +133,25 @@ function toneForHigherIsBetter(value: number | null | undefined) {
 }
 
 function toneForWebPain(value: number | null | undefined) {
-  // For web pain, "middle-high" is best opportunity.
+  // Higher pain = better rebuild target for our model.
   if (value == null) return "amber";
-  if (value >= 45 && value <= 85) return "green";
-  if ((value >= 30 && value < 45) || (value > 85 && value <= 95)) return "amber";
+  if (value >= 70) return "green";
+  if (value >= 45) return "amber";
   return "red";
 }
 
 function webPainContext(value: number | null | undefined) {
-  if (value == null) return "Web pain unknown; do a quick manual website check before outreach.";
-  if (value >= 45 && value <= 85) return "Good target zone: clear problems without looking completely abandoned.";
-  if (value < 45) return "Low pain: site is likely decent, so lead with conversion improvements not a rebuild.";
-  if (value > 85 && value <= 95) return "Very high pain: strong need, but qualify quickly to confirm they will invest.";
-  return "Extreme pain: may be closed/inactive or low intent; qualify before deep pitching.";
+  if (value == null) return "Web pain unknown — open the site and judge how embarrassing it is before outreach.";
+  if (value >= 85) {
+    return "Prime rebuild target: missing, broken, or unusable site. Lead with an affordable flat rebuild + hourly updates.";
+  }
+  if (value >= 70) {
+    return "Strong rebuild target: dated / painful enough that a cheaper rebuild is an easy sell vs agency pricing.";
+  }
+  if (value >= 45) {
+    return "Mixed: some friction, but not a disaster. Pitch a focused refresh or skip for worse sites first.";
+  }
+  return "Low pain: site is already decent. Deprioritize — only offer light hourly polish if they ask.";
 }
 
 function buildActionBrief(lead: {
@@ -134,30 +160,45 @@ function buildActionBrief(lead: {
   web_pain: number | null;
   website_url?: string | null;
   google_review_count?: number | null;
+  site_grade?: string | null;
 }) {
   const opp = lead.opportunity_score ?? 0;
   const viability = lead.business_viability ?? 0;
   const pain = lead.web_pain ?? 0;
   const reviews = lead.google_review_count ?? 0;
+  const grade = lead.site_grade;
 
   const meaning: string[] = [];
-  if (!lead.website_url) meaning.push("No website found: easy opening for outreach.");
-  if (pain >= 70) meaning.push("Current web presence is weak enough to create visible wins quickly.");
-  if (viability >= 70) meaning.push("Business looks stable enough to pay for a practical website package.");
-  if (reviews >= 50) meaning.push("Solid local reputation means website improvements can convert existing demand.");
-  if (!meaning.length) meaning.push("Potential exists, but qualification call should confirm budget and urgency.");
+  if (!lead.website_url || grade === "F") {
+    meaning.push("Website is missing or unusable — ideal for a simple affordable rebuild.");
+  } else if (pain >= 70 || grade === "C") {
+    meaning.push("Site looks bad enough that a cheaper rebuild beats incremental tweaks.");
+  }
+  if (viability >= 55) {
+    meaning.push("Business looks real enough to pay a practical package (not a vanity agency build).");
+  }
+  if (reviews >= 30) {
+    meaning.push("Local demand exists — a clearer site + menu/reservations should convert better.");
+  }
+  if (!meaning.length) {
+    meaning.push("Not a top rebuild target — park it and work worse sites first.");
+  }
 
   let priority = "Low";
-  if (opp >= 45) priority = "High";
-  else if (opp >= 25) priority = "Medium";
+  if (grade === "F" || pain >= 80 || opp >= 55) priority = "High";
+  else if (grade === "C" || pain >= 60 || opp >= 35) priority = "Medium";
 
-  let nextStep = "Send a light-touch intro and ask if they want a simple website refresh quote.";
-  if (!lead.website_url) {
-    nextStep = "Lead with a one-page launch offer (hours, menu, map, SEO basics) and promise quick turnaround.";
-  } else if (pain >= 60) {
-    nextStep = "Open with 2-3 specific website problems you can fix this week, then offer a scoped starter package.";
-  } else if (viability < 45) {
-    nextStep = "Qualify first: ask who decides, budget range, and timing before spending effort on a full pitch.";
+  let nextStep =
+    "Skip or park — better rebuild targets exist. Offer hourly polish only if they reach out.";
+  if (!lead.website_url || grade === "F") {
+    nextStep =
+      "Open with a flat affordable rebuild (home, menu, hours, map, contact) and clear hourly rate for updates after launch.";
+  } else if (pain >= 70 || grade === "C") {
+    nextStep =
+      "Call out 2–3 specific site problems, quote a rebuild for less than agency rates, then hourly for ongoing tweaks.";
+  } else if (pain >= 45) {
+    nextStep =
+      "Light touch: ask if they want a scoped refresh; don’t oversell a full rebuild unless they hate the current site.";
   }
 
   return { priority, meaning, nextStep };
@@ -167,25 +208,35 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
   const { id } = await params;
   const lead = await getLead(id);
   if (!lead) notFound();
-  const timeline = await getLeadTimeline(id);
+  const [timeline, messages, invoices] = await Promise.all([
+    getLeadTimeline(id),
+    getLeadMessages(id),
+    getLeadInvoices(id),
+  ]);
 
   const hasScreenshot = lead.current_screenshot_url && fs.existsSync(lead.current_screenshot_url);
   const brief = buildActionBrief(lead);
+  const isCustomer = lead.status === "closed_won";
 
   return (
     <div className="max-w-4xl">
       {/* Header */}
       <div className="mb-6">
-        <Link href="/app/leads" className="text-sm text-slate-500 hover:text-slate-300 mb-3 inline-block">← Leads</Link>
+        <Link href={isCustomer ? "/admin/leads?view=customers" : "/admin/leads"} className="text-sm text-slate-500 hover:text-slate-300 mb-3 inline-block">
+          ← {isCustomer ? "Customers" : "Leads"}
+        </Link>
         <div className="flex items-start justify-between gap-4">
           <div>
+            {isCustomer ? (
+              <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-400/90">Customer</p>
+            ) : null}
             <h1 className="text-2xl font-semibold text-white">{lead.business_name}</h1>
             <p className="text-slate-400 mt-1">{lead.address}</p>
           </div>
           <div className="flex items-center gap-2 shrink-0">
             {lead.tier && (
               <span className={`rounded-full px-3 py-1 text-sm font-bold border ${TIER_COLOR[lead.tier] ?? ""}`}>
-                Tier {lead.tier}
+                {lead.tier === "reject" ? "Skip" : `Tier ${lead.tier}`}
               </span>
             )}
             <StatusSelect leadId={lead.id} status={lead.status as LeadStatus} />
@@ -198,11 +249,12 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
         <div className="rounded-xl border border-white/10 bg-slate-900/60 p-5">
           <h2 className="text-xs font-semibold uppercase tracking-widest text-slate-500 mb-4">Business Info</h2>
           <dl className="space-y-2 text-sm">
+            <ContactEmailField leadId={lead.id} initialEmail={lead.contact_email} />
             {[
               ["Phone", lead.phone],
               ["Website", lead.website_url ? <a href={lead.website_url} target="_blank" rel="noopener noreferrer" className="text-teal-400 hover:underline truncate block max-w-[200px]">{lead.website_url}</a> : null],
               ["Cuisine", lead.cuisine],
-              ["Metro / ZIP", `${lead.metro} ${lead.zip}`],
+              ["Metro / ZIP", [lead.metro, lead.zip].filter(Boolean).join(" ") || null],
               ["Google Rating", lead.google_rating ? `${lead.google_rating} ★ (${lead.google_review_count} reviews)` : null],
             ].map(([label, value]) => value ? (
               <div key={String(label)} className="flex justify-between gap-2">
@@ -262,7 +314,7 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
 
         {/* Action brief */}
         <div className="rounded-xl border border-white/10 bg-slate-900/60 p-5">
-          <h2 className="text-xs font-semibold uppercase tracking-widest text-slate-500 mb-4">Action Plan</h2>
+          <h2 className="text-xs font-semibold uppercase tracking-widest text-slate-500 mb-4">Rebuild pitch</h2>
           <div className="space-y-3 text-sm">
             <p className="text-slate-200">
               <span className="text-slate-500">Priority:</span>{" "}
@@ -284,9 +336,27 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
           </div>
         </div>
 
-        {/* Outreach workspace */}
+        {/* Conversation */}
         <div className="md:col-span-2">
-          <OutreachPanel leadId={lead.id} defaultToEmail={null} />
+          <ConversationThread
+            leadId={lead.id}
+            defaultToEmail={lead.contact_email ?? null}
+            initialMessages={messages as ConversationMessage[]}
+          />
+        </div>
+
+        {/* Billing */}
+        <div className="md:col-span-2">
+          <BillingPanel
+            leadId={lead.id}
+            initialInvoices={invoices as InvoiceRow[]}
+            initialBarterEnabled={Boolean(lead.barter_payments_enabled)}
+          />
+        </div>
+
+        {/* Notes */}
+        <div className="md:col-span-2">
+          <NotesPanel leadId={lead.id} />
         </div>
 
         {/* Screenshot */}
@@ -303,40 +373,13 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
           </div>
         )}
 
-        {/* Timeline */}
-        <div className="rounded-xl border border-white/10 bg-slate-900/60 p-5">
-          <h2 className="text-xs font-semibold uppercase tracking-widest text-slate-500 mb-4">Timeline</h2>
-          <div className="space-y-3">
-            <div className="text-xs text-slate-500">
-              Discovered {new Date(lead.created_at).toLocaleDateString()} · Last updated{" "}
-              {new Date(lead.updated_at).toLocaleDateString()}
-            </div>
-            {timeline.length === 0 ? (
-              <p className="text-sm text-slate-500">No outreach activity yet.</p>
-            ) : (
-              <ul className="space-y-2">
-                {timeline.map((event: {
-                  id: string;
-                  title: string;
-                  body: string | null;
-                  created_at: string;
-                  source: string;
-                }) => (
-                  <li key={`${event.source}-${event.id}`} className="rounded-lg border border-white/10 p-3">
-                    <div className="flex justify-between gap-3 text-xs">
-                      <span className="text-slate-300">{event.title}</span>
-                      <span className="text-slate-500">
-                        {new Date(event.created_at).toLocaleString()}
-                      </span>
-                    </div>
-                    {event.body && (
-                      <p className="text-sm text-slate-400 mt-1 whitespace-pre-wrap">{event.body}</p>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
+        {/* Activity timeline (notes + status — emails live in Conversation) */}
+        <div className="md:col-span-2">
+          <ActivityLog
+            events={timeline}
+            discoveredAt={lead.created_at}
+            updatedAt={lead.updated_at}
+          />
         </div>
       </div>
     </div>

@@ -28,21 +28,21 @@ async function toggleSetting(key: string, value: boolean) {
   } finally {
     await pool.end();
   }
-  revalidatePath("/app/settings");
-  revalidatePath("/app/dashboard");
+  revalidatePath("/admin/settings");
+  revalidatePath("/admin/leads");
 }
 
 const TOGGLES = [
   {
     key: "external_comms",
-    label: "External Comms",
-    description: "Master kill switch. When OFF, agents stage everything internally but nothing is sent outside. Flip ON only when you're ready to run real outreach.",
+    label: "External email",
+    description: "When OFF, nothing leaves the CRM. Turn ON only when you are ready to send real outreach from conversations.",
     dangerLabel: "Enables outbound email to real prospects",
   },
   {
     key: "auto_send",
-    label: "Auto-Send",
-    description: "When ON, Concierge sends queued emails automatically without waiting for your approval. Keep OFF during Phases 1–4.",
+    label: "Auto-send",
+    description: "When ON, queued agent emails can send without your review. Keep OFF if you send everything yourself from the conversation thread.",
     dangerLabel: "Skips your approval queue",
   },
 ];
@@ -52,8 +52,11 @@ export default async function SettingsPage() {
 
   return (
     <div className="max-w-2xl">
-      <h1 className="text-2xl font-semibold text-white mb-2">Agent Controls</h1>
-      <p className="text-slate-400 text-sm mb-8">Kill switches and operational toggles. All changes are logged to the audit trail.</p>
+      <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">More</p>
+      <h1 className="text-2xl font-semibold text-white mb-2">Settings</h1>
+      <p className="text-slate-400 text-sm mb-8">
+        Safety switches for outbound email. Day-to-day work lives in the lead pool and customers.
+      </p>
 
       <div className="space-y-4">
         {TOGGLES.map((toggle) => {
@@ -95,17 +98,6 @@ export default async function SettingsPage() {
             </div>
           );
         })}
-      </div>
-
-      <div className="mt-10 rounded-xl border border-white/10 bg-slate-900/60 p-5">
-        <h2 className="text-sm font-semibold text-slate-300 mb-1 uppercase tracking-widest">Coming soon</h2>
-        <ul className="text-sm text-slate-500 space-y-1 mt-2">
-          <li>Per-agent enable / disable</li>
-          <li>Paced-send rate limits</li>
-          <li>Suppression list management</li>
-          <li>API key health checks</li>
-          <li>User management</li>
-        </ul>
       </div>
     </div>
   );

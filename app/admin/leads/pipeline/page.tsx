@@ -1,3 +1,4 @@
+import Link from "next/link";
 import ProspectorButton from "../prospector-button";
 import AnalyzerButton from "../analyzer-button";
 import { PipelineStatsStrip } from "../pipeline-stats-strip";
@@ -22,11 +23,15 @@ export default async function LeadsPipelinePage() {
       />
 
       <header className="relative mb-4 shrink-0">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">Background jobs</p>
-        <h1 className="mt-0.5 text-xl font-bold tracking-tight text-white sm:text-2xl">Pipeline</h1>
+        <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">Grow the pool</p>
+        <h1 className="mt-0.5 text-xl font-bold tracking-tight text-white sm:text-2xl">Find leads</h1>
         <p className="mt-1.5 max-w-2xl text-xs leading-snug text-slate-400 sm:text-sm sm:leading-normal">
-          Scrape adds or refreshes leads from Google Places. Analyze visits each pending site and writes grades and
-          snapshots. Both can run at the same time.
+          Scrape places, then analyze to surface <span className="text-slate-300">horrid / missing websites</span> —
+          your rebuild targets. Day-to-day outreach stays on{" "}
+          <Link href="/admin/leads" className="font-medium text-teal-400/90 hover:underline">
+            Leads
+          </Link>{" "}
+          (sorted worst sites first).
         </p>
       </header>
 
@@ -63,7 +68,7 @@ export default async function LeadsPipelinePage() {
                   2
                 </span>
                 <span>
-                  <strong className="text-slate-200">Analyze</strong> — site visit, grade, and snapshot per row.
+                  <strong className="text-slate-200">Analyze</strong> — grade sites; F/C = rebuild targets.
                 </span>
               </li>
               <li className="flex gap-2.5">
@@ -71,7 +76,7 @@ export default async function LeadsPipelinePage() {
                   3
                 </span>
                 <span>
-                  <strong className="text-slate-200">All leads</strong> — sort <strong className="text-slate-200">worst sites first</strong> for outreach.
+                  <strong className="text-slate-200">Leads</strong> — pitch affordable rebuilds + hourly updates.
                 </span>
               </li>
             </ol>

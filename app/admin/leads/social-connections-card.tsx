@@ -100,7 +100,7 @@ export default function SocialConnectionsCard() {
       return;
     }
 
-    const callbackUrl = encodeURIComponent("/app/leads");
+    const callbackUrl = encodeURIComponent("/admin/leads");
     const url = `/api/auth/signin/${provider}?callbackUrl=${callbackUrl}`;
     setConnecting(true);
     const popup = window.open(url, "kss-social-auth", "width=560,height=740");

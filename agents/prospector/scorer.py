@@ -1,6 +1,14 @@
-"""Scoring logic per architecture.md rubric."""
+"""Scoring for King Street Sites lead analytics.
+
+Business model: find restaurants/bars with horrible (or missing) websites,
+offer an affordable rebuild, then simple hourly rates for updates.
+Pain and site grade drive priority; viability is a soft qualifier.
+"""
+
+from __future__ import annotations
 
 import re
+from typing import Optional
 
 
 BAR_KEYWORDS = {
@@ -24,69 +32,76 @@ def _is_neighborhood_bar_fit(place: dict) -> bool:
     has_bar_keyword = any(k in name for k in BAR_KEYWORDS)
     return has_bar_type or has_bar_keyword
 
+
 def business_viability(place: dict) -> tuple[int, list[str]]:
-    """Return (score 0-100, list of hard-kill reasons)."""
+    """Return (score 0-100, list of hard-kill reasons).
+
+    Soft on quiet-but-real local spots (few reviews) so ugly sites still surface.
+    Hard-kill only clearly dead or toxic businesses.
+    """
     kills = []
 
     if place.get("business_status") != "OPERATIONAL":
         kills.append("not_operational")
-    if (place.get("user_ratings_total") or 0) < 10:
-        kills.append("fewer_than_10_reviews")
-    if (place.get("rating") or 0) < 3.0:
+    if (place.get("rating") or 0) < 3.0 and (place.get("user_ratings_total") or 0) >= 10:
         kills.append("rating_below_3")
 
     if kills:
         return 0, kills
 
-    score = 0
+    score = 40  # baseline: operational local business is workable
 
     ratings = place.get("user_ratings_total", 0) or 0
     rating = place.get("rating", 0) or 0
 
     if ratings >= 50:
-        score += 20
-    if rating >= 3.8:
+        score += 18
+    elif ratings >= 20:
+        score += 12
+    elif ratings >= 10:
+        score += 6
+    elif ratings < 5:
+        score -= 8  # very quiet — still keep, but lower
+
+    if rating >= 4.2:
         score += 10
-    if ratings >= 10:  # has phone proxy — we check presence of phone
-        score += 5
+    elif rating >= 3.8:
+        score += 6
+    elif rating >= 3.3:
+        score += 2
+
     if place.get("formatted_phone_number"):
         score += 5
 
-    # Independent (not a chain) — already filtered upstream, add bonus
-    score += 15
+    # Independent owner-ops (already filtered upstream)
+    score += 10
 
-    # Target owner-operated neighborhood bars/grills.
     if _is_neighborhood_bar_fit(place):
-        score += 10
-
-    # Budget-fit proxy: established but not massive brands.
-    if 15 <= ratings <= 250:
         score += 8
 
-    # Social links on website (from scrape)
+    # Established but not mega-brand — sweet for affordable rebuilds
+    if 15 <= ratings <= 400:
+        score += 8
+
     scrape = place.get("_scrape", {})
     if scrape.get("social_links"):
-        score += 10
+        score += 6
     if scrape.get("instagram_active_recently") or scrape.get("facebook_active_recently"):
-        score += 8
+        score += 6
 
-    # Placeholder for: ≥1 review in last 30 days (15pts), in biz ≥2yr (10pts),
-    # active social (15pts) — requires deeper data not in Places basic fields
-    # Award partial credit conservatively
     if ratings >= 100:
-        score += 15  # proxy for active, established business
+        score += 10
     elif ratings >= 30:
-        score += 8
+        score += 5
 
-    # De-prioritize polished high-competition districts and higher-end profiles.
     zip_code = _extract_zip(place)
     if zip_code in HIGH_COMPETITION_ZIPS:
-        score -= 12
+        score -= 10
 
     if (place.get("price_level") or 0) >= 3:
         score -= 8
 
-    scrape = place.get("_scrape", {})
+    # Already polished site → weaker rebuild target (viability stays, opp will drop via pain)
     perf = scrape.get("performance")
     if (
         scrape.get("reachable")
@@ -94,58 +109,88 @@ def business_viability(place: dict) -> tuple[int, list[str]]:
         and scrape.get("has_ordering")
         and scrape.get("has_reservation")
     ):
-        score -= 10
+        score -= 8
 
     return max(0, min(score, 100)), kills
 
 
 def web_pain(place: dict) -> int:
-    """Return web pain score 0-100. Higher = more pain = better opportunity."""
+    """Web pain 0-100. Higher = worse site = better rebuild outreach target."""
     scrape = place.get("_scrape", {})
-    score = 0
 
     if not place.get("website"):
-        # No website is a strong opening for local bars/grills.
+        # Missing site is a clean launch offer
         if _is_neighborhood_bar_fit(place):
-            return 90
-        return 75  # No website at all = high pain
+            return 95
+        return 88
 
     if not scrape.get("reachable"):
-        return 60  # Site exists but unreachable
+        # Broken / dead site — prime rebuild
+        return 92
 
+    score = 20  # baseline friction for any live legacy site
     perf = scrape.get("performance")
     accessibility = scrape.get("accessibility")
 
-    if perf is not None and perf < 50:
-        score += 15
-    if accessibility is not None and accessibility < 80:
-        score += 10
+    # Performance / mobile — lean hard into slow or unusable
+    if perf is not None:
+        if perf < 25:
+            score += 28
+        elif perf < 40:
+            score += 20
+        elif perf < 55:
+            score += 12
+    else:
+        score += 10  # unknown often means old CMS / blocked LH
+
+    if accessibility is not None:
+        if accessibility < 50:
+            score += 18
+        elif accessibility < 70:
+            score += 10
+    else:
+        score += 6
 
     if not scrape.get("has_ordering"):
-        score += 15
+        score += 12
     if not scrape.get("has_reservation"):
         score += 10
     if scrape.get("menu_is_pdf"):
-        score += 10
+        score += 14
+    if not scrape.get("has_html_menu_nav") and scrape.get("menu_is_pdf"):
+        score += 6
     if not scrape.get("has_contact_form"):
-        score += 5
+        score += 6
     if not scrape.get("social_links"):
-        score += 5
-
-    # If Lighthouse didn't run, give partial credit assuming avg pain
-    if perf is None:
-        score += 8
-    if accessibility is None:
-        score += 5
+        score += 4
 
     return min(score, 100)
 
 
-def opportunity_score(viability: int, pain: int) -> int:
-    return round((viability * pain) / 100)
+def opportunity_score(viability: int, pain: int, site_grade: Optional[str] = None) -> int:
+    """Pain-led opportunity for affordable rebuild outreach.
+
+    Horrible sites (high pain / F) rise to the top. Viability keeps dead
+    businesses from dominating, but does not equal-weight pain away.
+    """
+    if viability <= 0:
+        return 0
+
+    # Weighted blend — pain is the product signal
+    blended = round(pain * 0.7 + viability * 0.3)
+
+    grade_adjust = {
+        "F": 12,   # no site / broken / disastrous UX
+        "C": 4,    # clearly outdated — still a rebuild pitch
+        "B": -8,   # decent enough — lower priority
+        "A": -22,  # already fine — deprioritize
+    }.get(site_grade or "", 0)
+
+    return max(0, min(100, blended + grade_adjust))
 
 
 def assign_tier(score: int, all_scores: list[int]) -> str:
+    """Legacy percentile tier — analyzer uses tier_from_grade instead."""
     if not all_scores:
         return "C"
     sorted_scores = sorted(all_scores, reverse=True)

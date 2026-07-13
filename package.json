@@ -8,6 +8,8 @@
     "start": "next start",
     "lint": "eslint . --ext .ts,.tsx",
     "migrate": "node scripts/psql-with-env.mjs lib/db-migrate-scrape-analyze.sql",
+    "migrate:lead-crm": "node scripts/psql-with-env.mjs lib/db-migrate-lead-crm.sql",
+    "migrate:billing": "node scripts/psql-with-env.mjs lib/db-migrate-billing.sql",
     "reset": "node scripts/psql-with-env.mjs lib/db-reset-dev.sql"
   },
   "dependencies": {

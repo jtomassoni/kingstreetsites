@@ -99,7 +99,10 @@ def build_site_snapshot(place: dict) -> dict:
             "has_online_ordering": False,
             "has_reservations": False,
             "has_real_menu": False,
-            "pitch_angle": "No usable website presence. Offer a fast modern launch with ordering/reservations.",
+            "pitch_angle": (
+                "No usable website. Lead with an affordable rebuild "
+                "(simple site + menu + map) and hourly updates after launch."
+            ),
         }
 
     # Lighthouse often missing or harsh on heavy CMS sites — do not treat "no score" as failing mobile UX.
@@ -141,7 +144,7 @@ def build_site_snapshot(place: dict) -> dict:
     else:
         grade = "C"
 
-    if grade in ("C", "F"):
+    if grade == "F":
         touch_points: list[str] = []
         if not has_ordering:
             touch_points.append("no online ordering")
@@ -153,10 +156,33 @@ def build_site_snapshot(place: dict) -> dict:
             touch_points.append("weak accessibility")
         if not mobile_ready and perf is not None:
             touch_points.append("not mobile-friendly")
+        issue_summary = ", ".join(touch_points[:3]) if touch_points else "broken / unusable UX"
+        pitch_angle = (
+            f"Horrendous site ({issue_summary}). Top rebuild target — "
+            "quote a flat affordable rebuild, then hourly rates for ongoing updates."
+        )
+    elif grade == "C":
+        touch_points = []
+        if not has_ordering:
+            touch_points.append("no online ordering")
+        if not has_reservation:
+            touch_points.append("no reservations")
+        if menu_is_pdf:
+            touch_points.append("PDF-style menu")
+        if not accessibility_ok and accessibility is not None:
+            touch_points.append("weak accessibility")
+        if not mobile_ready and perf is not None:
+            touch_points.append("not mobile-friendly")
         issue_summary = ", ".join(touch_points[:3]) if touch_points else "outdated UX"
-        pitch_angle = f"Outdated web presence ({issue_summary}). Good candidate for a modern conversion-focused rebuild."
+        pitch_angle = (
+            f"Outdated site ({issue_summary}). Strong candidate for a cheaper rebuild "
+            "vs agency pricing, with simple hourly updates afterward."
+        )
     else:
-        pitch_angle = "Modern, conversion-ready site with strong UX signals. Lower outreach priority."
+        pitch_angle = (
+            "Site already looks conversion-ready. Low rebuild priority — "
+            "skip unless they ask, or offer light hourly polish only."
+        )
 
     return {
         "site_grade": grade,
@@ -171,13 +197,15 @@ def build_site_snapshot(place: dict) -> dict:
 
 
 def tier_from_grade(grade: str | None) -> str:
-    """Map site grade directly to tier — no cross-lead comparison needed for per-lead writes."""
-    if grade == "F" or grade == "C":
-        return "A"   # top outreach priority
+    """Map site grade to outreach tier. F = primary rebuild targets."""
+    if grade == "F":
+        return "A"  # horrendous / missing — call first
+    if grade == "C":
+        return "B"  # outdated — still worth pitching
     if grade == "B":
-        return "B"
+        return "C"
     if grade == "A":
-        return "C"   # polished, lower priority
+        return "reject"  # already fine
     return "C"
 
 
@@ -222,7 +250,7 @@ def analyze_one(row: dict, screenshot_dir: str) -> dict:
             },
         }
 
-    opp = opportunity_score(viability, pain)
+    opp = opportunity_score(viability, pain, snapshot.get("site_grade"))
     tier = tier_from_grade(snapshot["site_grade"])
     sc = scrape_data
 

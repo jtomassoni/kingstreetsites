@@ -127,7 +127,7 @@ function analyzerCompleteCopy(run: RunStatus): { headline: string; detail: strin
     return {
       headline: `${run.inserted.toLocaleString()} lead${run.inserted === 1 ? "" : "s"} updated`,
       detail:
-        "Snapshots and grades are saved. Open All leads to review, or dismiss this card when you are done here.",
+        "Snapshots and grades are saved. Open Lead pool to work outreach, or dismiss this card when you are done here.",
       strong: true,
     };
   }
@@ -297,10 +297,10 @@ export default function AnalyzerButton({ pipeline }: { pipeline: PipelineSummary
 
           <div className="mt-2 flex flex-wrap gap-2 sm:mt-3">
             <Link
-              href="/app/leads"
+              href="/admin/leads"
               className="inline-flex items-center justify-center rounded-lg border border-white/15 bg-white/[0.06] px-3 py-1.5 text-xs font-medium text-slate-200 transition hover:border-teal-500/40 hover:bg-teal-500/10 hover:text-white sm:rounded-xl sm:px-4 sm:py-2 sm:text-sm"
             >
-              Open All leads
+              Open lead pool
             </Link>
           </div>
 
