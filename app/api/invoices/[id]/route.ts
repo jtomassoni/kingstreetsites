@@ -5,9 +5,43 @@ import {
   ensureBillingSchema,
   dollarsToCents,
   INVOICE_STATUSES,
+  syncInvoiceStatusFromPayments,
   type InvoiceStatus,
 } from "@/lib/billing";
 import { ensureOutreachSchema } from "@/lib/outreach-schema";
+
+export async function GET(
+  _req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const session = await auth();
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const { id } = await params;
+  await ensureBillingSchema(dbPool);
+
+  const { rows: invoiceRows } = await dbPool.query(
+    `select * from invoices where id = $1`,
+    [id]
+  );
+  if (!invoiceRows[0]) return NextResponse.json({ error: "Invoice not found" }, { status: 404 });
+
+  const { rows: payments } = await dbPool.query(
+    `select id, invoice_id, amount_cents, method, paid_at, notes, created_at
+     from invoice_payments
+     where invoice_id = $1
+     order by paid_at asc, created_at asc`,
+    [id]
+  );
+
+  const paid_cents = payments.reduce((sum, p) => sum + Number(p.amount_cents), 0);
+
+  return NextResponse.json({
+    invoice: invoiceRows[0],
+    payments,
+    paid_cents,
+  });
+}
 
 export async function PATCH(
   req: NextRequest,
@@ -72,6 +106,12 @@ export async function PATCH(
   );
 
   if (!rows[0]) return NextResponse.json({ error: "Invoice not found" }, { status: 404 });
+
+  if ("amount" in body) {
+    await syncInvoiceStatusFromPayments(dbPool, id);
+    const refreshed = await dbPool.query(`select * from invoices where id = $1`, [id]);
+    if (refreshed.rows[0]) rows[0] = refreshed.rows[0];
+  }
 
   if (body.status) {
     await dbPool.query(

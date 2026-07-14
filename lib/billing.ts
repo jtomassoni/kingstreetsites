@@ -99,3 +99,39 @@ export async function nextInvoiceNumber(pool: Pool): Promise<string> {
   const seq = last ? Number(last.slice(prefix.length)) + 1 : 1;
   return `${prefix}${String(Number.isFinite(seq) ? seq : 1).padStart(4, "0")}`;
 }
+
+export async function syncInvoiceStatusFromPayments(pool: Pool, invoiceId: string) {
+  const invoiceRes = await pool.query(`select * from invoices where id = $1`, [invoiceId]);
+  const invoice = invoiceRes.rows[0];
+  if (!invoice || invoice.status === "void") return invoice?.status ?? null;
+
+  const paidSum = await pool.query<{ paid: number }>(
+    `select coalesce(sum(amount_cents), 0)::int as paid from invoice_payments where invoice_id = $1`,
+    [invoiceId]
+  );
+  const paid = paidSum.rows[0]?.paid ?? 0;
+
+  let nextStatus: InvoiceStatus = invoice.status;
+  if (paid >= invoice.amount_cents) {
+    nextStatus = "paid";
+  } else if (paid > 0) {
+    nextStatus = invoice.status === "draft" ? "sent" : invoice.status === "paid" ? "sent" : invoice.status;
+  } else if (invoice.status === "paid") {
+    nextStatus = "sent";
+  }
+
+  await pool.query(
+    `update invoices
+     set status = $2,
+         paid_at = case when $2 = 'paid' then coalesce(paid_at, now()) else null end,
+         updated_at = now()
+     where id = $1`,
+    [invoiceId, nextStatus]
+  );
+
+  return nextStatus;
+}
+
+export function centsToDollars(cents: number): string {
+  return (cents / 100).toFixed(2);
+}

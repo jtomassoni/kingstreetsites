@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useId } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { PipelineSummary } from "./pipeline-stats-strip";
+import { crm } from "@/lib/admin-ui";
 
 type RunStatus = {
   id: string;
@@ -88,7 +89,7 @@ function PhaseStrip({ activeIndex }: { activeIndex: number }) {
           className={`rounded-md border px-1 py-1 text-center text-[8px] font-bold uppercase tracking-wide sm:rounded-lg sm:px-1.5 sm:py-1.5 sm:text-[9px] ${
             i <= activeIndex
               ? "border-violet-500/35 bg-violet-500/10 text-violet-100"
-              : "border-white/[0.06] bg-slate-950/40 text-slate-600"
+              : "border-crm-border bg-crm-raised text-crm-faint"
           }`}
         >
           {label}
@@ -100,7 +101,7 @@ function PhaseStrip({ activeIndex }: { activeIndex: number }) {
 
 function IndeterminateBar() {
   return (
-    <div className="relative mb-2 h-2 overflow-hidden rounded-full bg-slate-950 ring-1 ring-white/10 sm:mb-2.5 sm:h-2.5">
+    <div className="relative mb-2 h-2 overflow-hidden rounded-full bg-crm-bg ring-1 ring-white/10 sm:mb-2.5 sm:h-2.5">
       <div className="absolute inset-y-0 left-0 w-[42%] rounded-full bg-gradient-to-r from-violet-700/40 via-indigo-400 to-sky-300 animate-pipeline-indeterminate opacity-90 shadow-[0_0_12px_rgba(139,92,246,0.35)]" />
     </div>
   );
@@ -149,13 +150,13 @@ function analyzerCompleteCopy(run: RunStatus): { headline: string; detail: strin
 function ActivityFooter({ run }: { run: RunStatus }) {
   if (!run.events?.length) return null;
   return (
-    <div className="mt-2 max-h-[5.5rem] overflow-y-auto rounded-lg border border-white/[0.08] bg-slate-950/50 p-2 ring-1 ring-inset ring-white/[0.04] sm:mt-3 sm:max-h-28 sm:rounded-xl sm:p-3">
-      <p className="mb-1 text-[9px] font-semibold uppercase tracking-[0.15em] text-slate-500 sm:mb-2 sm:text-[10px]">Recent activity</p>
-      <ul className="space-y-1 text-[10px] text-slate-400 sm:space-y-1.5 sm:text-[11px]">
+    <div className="mt-2 max-h-[5.5rem] overflow-y-auto rounded-lg border border-crm-border bg-crm-bg/50 p-2 ring-1 ring-inset ring-white/[0.04] sm:mt-3 sm:max-h-28 sm:rounded-xl sm:p-3">
+      <p className="mb-1 text-[9px] font-semibold uppercase tracking-[0.15em] text-crm-faint sm:mb-2 sm:text-[10px]">Recent activity</p>
+      <ul className="space-y-1 text-[10px] text-crm-muted sm:space-y-1.5 sm:text-[11px]">
         {run.events.slice(0, 4).map((event, idx) => (
           <li key={`${event.action}-${event.created_at}-${idx}`} className="flex justify-between gap-2">
             <span className="truncate">{actionLabel(event.action)}</span>
-            <span className="shrink-0 text-slate-500">
+            <span className="shrink-0 text-crm-faint">
               {new Date(event.created_at).toLocaleTimeString([], {
                 hour: "2-digit",
                 minute: "2-digit",
@@ -169,10 +170,8 @@ function ActivityFooter({ run }: { run: RunStatus }) {
   );
 }
 
-const CONFIGURE_SHELL =
-  "flex min-h-[240px] w-full flex-col gap-3 rounded-2xl border p-4 ring-1 ring-inset ring-white/[0.04] sm:min-h-[252px] sm:gap-3.5";
-const ANALYZE_CONTROL_CLASS =
-  "h-10 w-full rounded-lg border border-white/10 bg-slate-900/80 px-3 text-sm text-white shadow-sm transition [color-scheme:dark] focus:border-violet-500/40 focus:outline-none focus:ring-1 focus:ring-violet-500/30";
+const CONFIGURE_SHELL = crm.toolCard;
+const ANALYZE_CONTROL_CLASS = `${crm.input} h-10 [color-scheme:dark]`;
 
 export default function AnalyzerButton({ pipeline }: { pipeline: PipelineSummary }) {
   const router = useRouter();
@@ -259,13 +258,13 @@ export default function AnalyzerButton({ pipeline }: { pipeline: PipelineSummary
                 )}
               </div>
               <div className="min-w-0">
-                <p className="text-[9px] font-semibold uppercase tracking-[0.18em] text-slate-500 sm:text-[10px] sm:tracking-[0.2em]">Analyze leads</p>
-                <h3 className={`mt-0.5 text-base font-bold leading-snug sm:mt-1 sm:text-lg ${success ? "text-white" : "text-slate-100"}`}>
+                <p className="text-[9px] font-semibold uppercase tracking-[0.18em] text-crm-faint sm:text-[10px] sm:tracking-[0.2em]">Analyze leads</p>
+                <h3 className={`mt-0.5 text-base font-bold leading-snug sm:mt-1 sm:text-lg ${success ? "text-crm-text" : "text-crm-text"}`}>
                   {copy.headline}
                 </h3>
-                <p className="mt-1 line-clamp-2 text-xs leading-snug text-slate-400 sm:mt-1.5 sm:text-sm sm:leading-relaxed">{copy.detail}</p>
+                <p className="mt-1 line-clamp-2 text-xs leading-snug text-crm-muted sm:mt-1.5 sm:text-sm sm:leading-relaxed">{copy.detail}</p>
                 {run.total > 0 ? (
-                  <p className="mt-1.5 font-mono text-[10px] text-slate-500 sm:mt-2 sm:text-xs">
+                  <p className="mt-1.5 font-mono text-[10px] text-crm-faint sm:mt-2 sm:text-xs">
                     Run scope: {run.processed.toLocaleString()} / {run.total.toLocaleString()} processed ·{" "}
                     {run.inserted.toLocaleString()} written
                   </p>
@@ -277,15 +276,15 @@ export default function AnalyzerButton({ pipeline }: { pipeline: PipelineSummary
               onClick={() => setRun(null)}
               className={`shrink-0 rounded-lg px-3 py-2 text-xs font-semibold transition sm:rounded-xl sm:px-4 sm:py-2.5 sm:text-sm sm:self-start ${
                 success
-                  ? "bg-gradient-to-b from-emerald-500 to-emerald-600 text-white shadow-md shadow-emerald-950/40 hover:from-emerald-400 hover:to-emerald-500"
-                  : "border border-white/15 bg-slate-800 text-slate-200 hover:border-white/25 hover:bg-slate-700"
+                  ? "bg-gradient-to-b from-emerald-500 to-emerald-600 text-crm-text shadow-md shadow-emerald-950/40 hover:from-emerald-400 hover:to-emerald-500"
+                  : "border border-crm-border bg-crm-raised text-crm-text hover:border-white/25 hover:bg-slate-700"
               }`}
             >
               Dismiss
             </button>
           </div>
 
-          <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-950/80 ring-1 ring-white/10 sm:mt-3 sm:h-2">
+          <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-crm-bg/80 ring-1 ring-white/10 sm:mt-3 sm:h-2">
             <div
               className={`h-full rounded-full transition-all duration-700 ${
                 success
@@ -298,7 +297,7 @@ export default function AnalyzerButton({ pipeline }: { pipeline: PipelineSummary
           <div className="mt-2 flex flex-wrap gap-2 sm:mt-3">
             <Link
               href="/admin/leads"
-              className="inline-flex items-center justify-center rounded-lg border border-white/15 bg-white/[0.06] px-3 py-1.5 text-xs font-medium text-slate-200 transition hover:border-teal-500/40 hover:bg-teal-500/10 hover:text-white sm:rounded-xl sm:px-4 sm:py-2 sm:text-sm"
+              className="inline-flex items-center justify-center rounded-lg border border-crm-border bg-white/[0.06] px-3 py-1.5 text-xs font-medium text-crm-text transition hover:border-teal-500/40 hover:bg-teal-500/10 hover:text-crm-text sm:rounded-xl sm:px-4 sm:py-2 sm:text-sm"
             >
               Open lead pool
             </Link>
@@ -321,15 +320,15 @@ export default function AnalyzerButton({ pipeline }: { pipeline: PipelineSummary
               </div>
               <div className="min-w-0">
                 <p className="text-[9px] font-semibold uppercase tracking-[0.18em] text-red-300/80 sm:text-[10px] sm:tracking-[0.2em]">Analyze leads</p>
-                <h3 className="mt-0.5 text-base font-bold text-white sm:mt-1 sm:text-lg">Run failed</h3>
+                <h3 className="mt-0.5 text-base font-bold text-crm-text sm:mt-1 sm:text-lg">Run failed</h3>
                 <p className="mt-1 line-clamp-3 break-words text-xs text-red-200/90 sm:mt-2 sm:text-sm">{run.error ?? "Unknown error"}</p>
-                <p className="mt-1 text-[10px] text-slate-500 sm:mt-2 sm:text-xs">See agents/analyzer/worker.log for full output.</p>
+                <p className="mt-1 text-[10px] text-crm-faint sm:mt-2 sm:text-xs">See agents/analyzer/worker.log for full output.</p>
               </div>
             </div>
             <button
               type="button"
               onClick={() => setRun(null)}
-              className="shrink-0 rounded-lg border border-white/15 bg-slate-800 px-3 py-2 text-xs font-semibold text-slate-200 transition hover:bg-slate-700 sm:rounded-xl sm:px-4 sm:py-2.5 sm:text-sm sm:self-start"
+              className="shrink-0 rounded-lg border border-crm-border bg-crm-raised px-3 py-2 text-xs font-semibold text-crm-text transition hover:bg-slate-700 sm:rounded-xl sm:px-4 sm:py-2.5 sm:text-sm sm:self-start"
             >
               Dismiss
             </button>
@@ -347,14 +346,14 @@ export default function AnalyzerButton({ pipeline }: { pipeline: PipelineSummary
     const stepIdx = analyzerStepIndex(phase);
 
     return (
-      <div className="flex min-h-0 w-full flex-col rounded-2xl border border-white/10 bg-gradient-to-br from-slate-800/50 via-slate-900/60 to-indigo-950/40 p-3 shadow-lg shadow-black/30 ring-1 ring-violet-500/15 sm:p-4">
+      <div className="flex min-h-0 w-full flex-col rounded-2xl border border-crm-border bg-gradient-to-br from-slate-800/50 via-slate-900/60 to-indigo-950/40 p-3 shadow-lg shadow-black/30 ring-1 ring-violet-500/15 sm:p-4">
         <PhaseStrip activeIndex={stepIdx} />
 
         <div className="flex flex-wrap items-start justify-between gap-1.5 sm:gap-2">
           <div className="min-w-0">
-            <span className="text-xs font-semibold text-white sm:text-sm">Analyze leads</span>
+            <span className="text-xs font-semibold text-crm-text sm:text-sm">Analyze leads</span>
             <span className="ml-1.5 text-[10px] font-medium text-violet-300 animate-pulse sm:ml-2 sm:text-xs">running</span>
-            <p className="mt-0.5 line-clamp-2 text-[10px] leading-snug text-slate-500 sm:mt-1 sm:text-[11px] sm:line-clamp-none">
+            <p className="mt-0.5 line-clamp-2 text-[10px] leading-snug text-crm-faint sm:mt-1 sm:text-[11px] sm:line-clamp-none">
               {queueUnknown
                 ? "Resolving how many pending leads to process — total ticks up when the worker finishes counting."
                 : spinup
@@ -363,14 +362,14 @@ export default function AnalyzerButton({ pipeline }: { pipeline: PipelineSummary
             </p>
           </div>
           <div className="flex shrink-0 items-center gap-2">
-            <span className="rounded-full border border-white/10 bg-slate-950/60 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+            <span className="rounded-full border border-crm-border bg-crm-bg/60 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-crm-muted">
               {phaseLabel(phase)}
             </span>
-            <span className="text-xs font-mono text-slate-500">{showMarquee ? "—" : `${p}%`}</span>
+            <span className="text-xs font-mono text-crm-faint">{showMarquee ? "—" : `${p}%`}</span>
             <button
               type="button"
               onClick={() => setRun(null)}
-              className="rounded-lg border border-white/10 bg-slate-800/80 px-3 py-1 text-xs font-semibold text-slate-300 transition hover:border-white/20 hover:bg-slate-700 hover:text-white"
+              className="rounded-lg border border-crm-border bg-crm-raised/80 px-3 py-1 text-xs font-semibold text-crm-muted transition hover:border-white/20 hover:bg-slate-700 hover:text-crm-text"
             >
               Dismiss
             </button>
@@ -380,7 +379,7 @@ export default function AnalyzerButton({ pipeline }: { pipeline: PipelineSummary
         {showMarquee ? (
           <IndeterminateBar />
         ) : (
-          <div className="mb-2 h-2 overflow-hidden rounded-full bg-slate-950 ring-1 ring-white/10 sm:h-2.5">
+          <div className="mb-2 h-2 overflow-hidden rounded-full bg-crm-bg ring-1 ring-white/10 sm:h-2.5">
             <div
               className="h-full rounded-full bg-gradient-to-r from-violet-600 via-indigo-500 to-sky-400 transition-all duration-1000"
               style={{ width: `${p}%` }}
@@ -388,47 +387,47 @@ export default function AnalyzerButton({ pipeline }: { pipeline: PipelineSummary
           </div>
         )}
 
-        <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-0.5 text-[10px] text-slate-500 sm:gap-x-3 sm:text-xs">
+        <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-0.5 text-[10px] text-crm-faint sm:gap-x-3 sm:text-xs">
           <span className="min-w-0 flex-1 truncate">
             {run.current_business ? run.current_business : "Starting…"}
           </span>
           {run.processed > 0 && <span className="shrink-0">{eta(run)}</span>}
         </div>
 
-        <div className="mt-1.5 grid grid-cols-3 gap-1.5 text-[10px] text-slate-500 sm:mt-2 sm:gap-2 sm:text-[11px]">
-          <div className="rounded-md border border-white/[0.06] bg-slate-950/40 px-1.5 py-1 text-center sm:rounded-lg sm:px-2 sm:py-1.5">
-            <p className="text-[8px] uppercase tracking-wide text-slate-600 sm:text-[9px]">Written</p>
+        <div className="mt-1.5 grid grid-cols-3 gap-1.5 text-[10px] text-crm-faint sm:mt-2 sm:gap-2 sm:text-[11px]">
+          <div className="rounded-md border border-crm-border bg-crm-raised px-1.5 py-1 text-center sm:rounded-lg sm:px-2 sm:py-1.5">
+            <p className="text-[8px] uppercase tracking-wide text-crm-faint sm:text-[9px]">Written</p>
             <p className="font-mono text-xs font-semibold text-violet-200/90 sm:text-sm">{run.inserted}</p>
           </div>
-          <div className="rounded-md border border-white/[0.06] bg-slate-950/40 px-1.5 py-1 text-center sm:rounded-lg sm:px-2 sm:py-1.5">
-            <p className="text-[8px] uppercase tracking-wide text-slate-600 sm:text-[9px]">Progress</p>
-            <p className="font-mono text-xs font-semibold text-slate-200 sm:text-sm">
+          <div className="rounded-md border border-crm-border bg-crm-raised px-1.5 py-1 text-center sm:rounded-lg sm:px-2 sm:py-1.5">
+            <p className="text-[8px] uppercase tracking-wide text-crm-faint sm:text-[9px]">Progress</p>
+            <p className="font-mono text-xs font-semibold text-crm-text sm:text-sm">
               {run.processed}
-              <span className="text-slate-600">/{run.total || "…"}</span>
+              <span className="text-crm-faint">/{run.total || "…"}</span>
             </p>
           </div>
-          <div className="rounded-md border border-white/[0.06] bg-slate-950/40 px-1.5 py-1 text-center sm:rounded-lg sm:px-2 sm:py-1.5">
-            <p className="text-[8px] uppercase tracking-wide text-slate-600 sm:text-[9px]">Rate</p>
-            <p className="font-mono text-xs font-semibold text-slate-300 sm:text-sm">{rate(run)}</p>
+          <div className="rounded-md border border-crm-border bg-crm-raised px-1.5 py-1 text-center sm:rounded-lg sm:px-2 sm:py-1.5">
+            <p className="text-[8px] uppercase tracking-wide text-crm-faint sm:text-[9px]">Rate</p>
+            <p className="font-mono text-xs font-semibold text-crm-muted sm:text-sm">{rate(run)}</p>
           </div>
         </div>
 
         <div className="mt-1.5 min-h-0 shrink-0 sm:mt-2">
           {run.status === "running" && (!run.events || run.events.length === 0) && (
-            <div className="rounded-md border border-dashed border-white/10 bg-slate-950/30 px-2 py-1.5 sm:rounded-lg sm:p-2.5">
-              <p className="text-[9px] font-semibold uppercase tracking-wide text-slate-500 sm:text-[10px]">Activity</p>
-              <p className="mt-0.5 text-[10px] leading-snug text-slate-600 sm:mt-1 sm:text-[11px]">Events appear as the worker logs milestones.</p>
+            <div className="rounded-md border border-dashed border-crm-border bg-crm-raised px-2 py-1.5 sm:rounded-lg sm:p-2.5">
+              <p className="text-[9px] font-semibold uppercase tracking-wide text-crm-faint sm:text-[10px]">Activity</p>
+              <p className="mt-0.5 text-[10px] leading-snug text-crm-faint sm:mt-1 sm:text-[11px]">Events appear as the worker logs milestones.</p>
             </div>
           )}
 
           {run.events && run.events.length > 0 && (
-            <div className="rounded-lg border border-white/10 bg-slate-950/60 p-2 ring-1 ring-inset ring-white/5 sm:rounded-xl sm:p-3">
-              <p className="mb-1 text-[9px] font-semibold uppercase tracking-[0.15em] text-slate-500 sm:mb-2 sm:text-[10px]">Activity</p>
-              <ul className="max-h-[4.5rem] space-y-0.5 overflow-y-auto pr-1 text-[10px] text-slate-400 sm:max-h-24 sm:space-y-1 sm:text-[11px]">
+            <div className="rounded-lg border border-crm-border bg-crm-bg/60 p-2 ring-1 ring-inset ring-white/5 sm:rounded-xl sm:p-3">
+              <p className="mb-1 text-[9px] font-semibold uppercase tracking-[0.15em] text-crm-faint sm:mb-2 sm:text-[10px]">Activity</p>
+              <ul className="max-h-[4.5rem] space-y-0.5 overflow-y-auto pr-1 text-[10px] text-crm-muted sm:max-h-24 sm:space-y-1 sm:text-[11px]">
                 {run.events.slice(0, 4).map((event, idx) => (
                   <li key={`${event.action}-${event.created_at}-${idx}`} className="flex justify-between gap-2">
                     <span className="truncate">{actionLabel(event.action)}</span>
-                    <span className="shrink-0 text-slate-500">
+                    <span className="shrink-0 text-crm-faint">
                       {new Date(event.created_at).toLocaleTimeString([], {
                         hour: "2-digit",
                         minute: "2-digit",
@@ -452,8 +451,8 @@ export default function AnalyzerButton({ pipeline }: { pipeline: PipelineSummary
           <div className="pointer-events-none absolute -left-8 -bottom-8 h-28 w-28 rounded-full bg-violet-500/15 blur-2xl" aria-hidden />
           <div className="relative flex flex-col">
             <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-violet-300/90">Step 2 · Enrich</p>
-            <h3 className="mt-1.5 text-base font-bold tracking-tight text-white sm:mt-2 sm:text-lg">Analyze websites</h3>
-            <p className="mt-1.5 text-xs leading-snug text-slate-400 sm:mt-2 sm:text-sm sm:leading-relaxed">
+            <h3 className="mt-1.5 text-base font-bold tracking-tight text-crm-text sm:mt-2 sm:text-lg">Analyze websites</h3>
+            <p className="mt-1.5 text-xs leading-snug text-crm-muted sm:mt-2 sm:text-sm sm:leading-relaxed">
               Visits each pending lead, captures UX signals, and writes <span className="font-medium text-teal-200/80">grade + snapshot</span>{" "}
               immediately per row.
             </p>
@@ -474,7 +473,7 @@ export default function AnalyzerButton({ pipeline }: { pipeline: PipelineSummary
             <button
               type="button"
               onClick={() => setOpen(true)}
-              className="mt-3 w-full rounded-xl bg-gradient-to-b from-violet-500 to-indigo-600 py-2 text-sm font-semibold text-white shadow-lg shadow-violet-950/45 ring-1 ring-white/10 transition hover:from-violet-400 hover:to-indigo-500 sm:mt-4 sm:py-2.5"
+              className="mt-3 w-full rounded-xl bg-gradient-to-b from-violet-500 to-indigo-600 py-2 text-sm font-semibold text-crm-text shadow-lg shadow-violet-950/45 ring-1 ring-white/10 transition hover:from-violet-400 hover:to-indigo-500 sm:mt-4 sm:py-2.5"
             >
               Set batch size &amp; run
             </button>
@@ -486,13 +485,13 @@ export default function AnalyzerButton({ pipeline }: { pipeline: PipelineSummary
         >
           <header className="shrink-0 space-y-0.5">
             <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-violet-300/90">Configure analyze</p>
-            <p className="text-xs leading-snug text-slate-500">
-              Pending leads only. Visits up to <span className="font-medium text-slate-400">5000</span> sites per run.
+            <p className="text-xs leading-snug text-crm-faint">
+              Pending leads only. Visits up to <span className="font-medium text-crm-muted">5000</span> sites per run.
             </p>
           </header>
 
           <div className="min-h-0 shrink-0 space-y-1.5">
-            <label htmlFor={limitFieldId} className="block text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+            <label htmlFor={limitFieldId} className="block text-[10px] font-semibold uppercase tracking-wide text-crm-faint">
               Batch limit
             </label>
             <input
@@ -504,22 +503,22 @@ export default function AnalyzerButton({ pipeline }: { pipeline: PipelineSummary
               onChange={(e) => setLimit(Number(e.target.value) || 200)}
               className={ANALYZE_CONTROL_CLASS}
             />
-            <p className="text-[10px] text-slate-600">Range 1–5000 · counts only rows still needing analysis.</p>
+            <p className="text-[10px] text-crm-faint">Range 1–5000 · counts only rows still needing analysis.</p>
           </div>
 
-          <div className="mt-auto flex shrink-0 flex-col gap-2 border-t border-white/[0.06] pt-3">
+          <div className="mt-auto flex shrink-0 flex-col gap-2 border-t border-crm-border pt-3">
             <button
               type="button"
               onClick={startRun}
               disabled={starting}
-              className="h-10 w-full rounded-lg bg-gradient-to-b from-violet-500 to-indigo-600 text-sm font-semibold text-white shadow-md shadow-violet-950/40 transition hover:from-violet-400 hover:to-indigo-500 disabled:opacity-50"
+              className="h-10 w-full rounded-lg bg-gradient-to-b from-violet-500 to-indigo-600 text-sm font-semibold text-crm-text shadow-md shadow-violet-950/40 transition hover:from-violet-400 hover:to-indigo-500 disabled:opacity-50"
             >
               {starting ? "Starting…" : "Run analyzer"}
             </button>
             <button
               type="button"
               onClick={() => setOpen(false)}
-              className="py-1 text-center text-xs font-medium text-slate-500 transition hover:text-slate-300"
+              className="py-1 text-center text-xs font-medium text-crm-faint transition hover:text-crm-muted"
             >
               ← Back to overview
             </button>

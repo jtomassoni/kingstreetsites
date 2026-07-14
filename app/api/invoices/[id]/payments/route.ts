@@ -5,6 +5,7 @@ import {
   ensureBillingSchema,
   dollarsToCents,
   PAYMENT_METHODS,
+  syncInvoiceStatusFromPayments,
   type PaymentMethod,
 } from "@/lib/billing";
 import { ensureOutreachSchema } from "@/lib/outreach-schema";
@@ -65,22 +66,7 @@ export async function POST(
     [id]
   );
   const paid = paidSum.rows[0]?.paid ?? 0;
-
-  let nextStatus = invoice.status;
-  if (paid >= invoice.amount_cents && invoice.status !== "void") {
-    nextStatus = "paid";
-  } else if (invoice.status === "draft") {
-    nextStatus = "sent";
-  }
-
-  await dbPool.query(
-    `update invoices
-     set status = $2,
-         paid_at = case when $2 = 'paid' then coalesce(paid_at, now()) else paid_at end,
-         updated_at = now()
-     where id = $1`,
-    [id, nextStatus]
-  );
+  const nextStatus = await syncInvoiceStatusFromPayments(dbPool, id);
 
   await dbPool.query(
     `insert into lead_timeline_events (lead_id, event_type, title, body, metadata)

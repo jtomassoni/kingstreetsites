@@ -39,7 +39,7 @@ export function leadFilterClause(filters: LeadListFilters = {}): {
   if (q?.trim()) {
     const idx = values.length + 1;
     conditions.push(
-      `(business_name ilike $${idx} or coalesce(metro, '') ilike $${idx} or coalesce(zip, '') ilike $${idx} or coalesce(contact_email, '') ilike $${idx} or coalesce(phone, '') ilike $${idx} or coalesce(website_url, '') ilike $${idx} or coalesce(address, '') ilike $${idx})`
+      `(business_name ilike $${idx} or coalesce(metro, '') ilike $${idx} or coalesce(zip, '') ilike $${idx} or coalesce(contact_name, '') ilike $${idx} or coalesce(contact_email, '') ilike $${idx} or coalesce(phone, '') ilike $${idx} or coalesce(website_url, '') ilike $${idx} or coalesce(address, '') ilike $${idx})`
     );
     values.push(`%${q.trim()}%`);
   }
@@ -142,7 +142,7 @@ export async function getLeads(filters: LeadListFilters = {}, sort?: string) {
       `select leads.id, business_name, metro, zip, tier, status, analysis_status, analyzed_at,
               site_grade, pitch_angle, looks_modern, mobile_ready, accessibility_ok,
               has_online_ordering, has_reservations, has_real_menu,
-              google_rating, google_review_count, website_url, contact_email, phone, created_at
+              google_rating, google_review_count, website_url, contact_name, contact_email, phone, created_at
               ${billingSelect}
        from leads
        ${billingJoin}

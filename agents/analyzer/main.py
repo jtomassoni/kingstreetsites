@@ -265,6 +265,11 @@ def analyze_one(row: dict, screenshot_dir: str) -> dict:
             "current_screenshot_url": sc.get("screenshot_path"),
             "analysis_status": "complete",
             "analysis_error": None,
+            "contact_email": sc.get("contact_email"),
+            "contact_name": sc.get("contact_name"),
+            "contact_role": sc.get("contact_role"),
+            "contact_email_source": sc.get("contact_email_source"),
+            "contact_enrichment": sc.get("contact_enrichment"),
             **snapshot,
         },
     }

@@ -25,6 +25,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid contact email" }, { status: 400 });
   }
 
+  const contactName = clean(body?.contact_name);
+  const contactRole = clean(body?.contact_role);
+  if (contactRole && !["owner", "gm", "manager", "other"].includes(contactRole)) {
+    return NextResponse.json({ error: "Invalid contact role" }, { status: 400 });
+  }
+  const contactSource =
+    contactEmail || contactName ? "manual" : null;
+
   await ensureLeadCrmSchema(dbPool);
   await ensureOutreachSchema(dbPool);
 
@@ -37,11 +45,12 @@ export async function POST(req: NextRequest) {
 
   const result = await dbPool.query(
     `insert into leads (
-       business_name, contact_email, phone, website_url, address, metro, zip, cuisine,
+       business_name, contact_name, contact_role, contact_email, contact_email_source,
+       phone, website_url, address, metro, zip, cuisine,
        analysis_status, status
-     ) values ($1, $2, $3, $4, $5, $6, $7, $8, 'pending', 'new')
-     returning id, business_name, contact_email, status`,
-    [businessName, contactEmail, phone, websiteUrl, address, metro, zip, cuisine]
+     ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'pending', 'new')
+     returning id, business_name, contact_email, contact_name, status`,
+    [businessName, contactName, contactRole, contactEmail, contactSource, phone, websiteUrl, address, metro, zip, cuisine]
   );
 
   const lead = result.rows[0];

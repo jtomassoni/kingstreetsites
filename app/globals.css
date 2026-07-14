@@ -16,14 +16,27 @@ body {
 }
 
 /* ── App shell (CRM) ───────────────────────────────────────── */
-body.app-shell {
-  background: #020617;
-  color: #e2e8f0;
+.app-shell {
+  --crm-bg: #09090b;
+  --crm-surface: #121214;
+  --crm-raised: #1a1a1e;
+  --crm-border: #27272a;
+  --crm-text: #ececee;
+  --crm-muted: #a0a0ab;
+  --crm-faint: #6b6b76;
+  --crm-accent: #a1a1aa;
+  --crm-accent-hover: #d4d4d8;
+
+  background: var(--crm-bg);
+  color: var(--crm-text);
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-.lead-status-select option {
-  background-color: #1e293b;
-  color: #f1f5f9;
+.app-shell .lead-status-select option {
+  background-color: var(--crm-raised);
+  color: var(--crm-text);
 }
 
 @keyframes pipeline-indeterminate {

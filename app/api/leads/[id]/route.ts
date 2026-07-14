@@ -32,6 +32,22 @@ export async function PATCH(
     values.push(email);
     updates.push(`contact_email = $${values.length}`);
   }
+  if ("contact_name" in body) {
+    values.push(clean(body.contact_name));
+    updates.push(`contact_name = $${values.length}`);
+  }
+  if ("contact_role" in body) {
+    const role = clean(body.contact_role);
+    if (role && !["owner", "gm", "manager", "other"].includes(role)) {
+      return NextResponse.json({ error: "Invalid contact role" }, { status: 400 });
+    }
+    values.push(role);
+    updates.push(`contact_role = $${values.length}`);
+  }
+  if ("contact_email_source" in body) {
+    values.push(clean(body.contact_email_source));
+    updates.push(`contact_email_source = $${values.length}`);
+  }
   if ("phone" in body) {
     values.push(clean(body.phone));
     updates.push(`phone = $${values.length}`);
@@ -57,7 +73,7 @@ export async function PATCH(
     `update leads
      set ${updates.join(", ")}, updated_at = now()
      where id = $${values.length}
-     returning id, contact_email, phone, website_url, barter_payments_enabled`,
+     returning id, contact_email, contact_name, contact_role, contact_email_source, phone, website_url, barter_payments_enabled`,
     values
   );
 

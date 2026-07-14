@@ -5,6 +5,17 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
+        crm: {
+          bg: "var(--crm-bg)",
+          surface: "var(--crm-surface)",
+          raised: "var(--crm-raised)",
+          border: "var(--crm-border)",
+          text: "var(--crm-text)",
+          muted: "var(--crm-muted)",
+          faint: "var(--crm-faint)",
+          accent: "var(--crm-accent)",
+          "accent-hover": "var(--crm-accent-hover)",
+        },
         ink: {
           DEFAULT: "#0c1222",
           muted: "#3d4a63",
