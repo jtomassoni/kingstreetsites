@@ -9,6 +9,8 @@ import tempfile
 from pathlib import Path
 from playwright.async_api import async_playwright
 
+from contact_enrichment import enrich_contact_from_site
+
 ORDERING_KEYWORDS = ["order online", "order now", "doordash", "grubhub", "ubereats",
                      "uber eats", "toast", "square", "olo", "slice", "chownow"]
 RESERVATION_KEYWORDS = ["reserve", "reservation", "book a table", "opentable",
@@ -69,6 +71,11 @@ async def scrape_site(url: str, screenshot_dir: str, slug: str) -> dict:
         "facebook_active_recently": None,
         "screenshot_path": None,
         "load_error": None,
+        "contact_email": None,
+        "contact_name": None,
+        "contact_role": None,
+        "contact_email_source": None,
+        "contact_enrichment": None,
     }
 
     async with async_playwright() as p:
@@ -118,6 +125,14 @@ async def scrape_site(url: str, screenshot_dir: str, slug: str) -> dict:
             screenshot_path = os.path.join(screenshot_dir, f"{slug}.png")
             await page.screenshot(path=screenshot_path, full_page=False)
             result["screenshot_path"] = screenshot_path
+
+            homepage_html = await page.content()
+            contact = await enrich_contact_from_site(page, url, links, homepage_html)
+            result["contact_email"] = contact.get("contact_email")
+            result["contact_name"] = contact.get("contact_name")
+            result["contact_role"] = contact.get("contact_role")
+            result["contact_email_source"] = contact.get("contact_email_source")
+            result["contact_enrichment"] = contact.get("contact_enrichment")
 
             # Best-effort activity check for linked Instagram/Facebook pages.
             instagram_link = next((l for l in result["social_links"] if "instagram.com" in l), None)

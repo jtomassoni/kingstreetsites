@@ -16,7 +16,7 @@ function LoginForm() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
-    await signIn("resend", { email, redirect: false, redirectTo: "/app/dashboard" });
+    await signIn("resend", { email, redirect: false, redirectTo: "/admin/leads" });
     setSent(true);
     setLoading(false);
   }

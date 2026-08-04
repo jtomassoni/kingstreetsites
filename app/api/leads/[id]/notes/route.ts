@@ -20,9 +20,15 @@ export async function POST(
 
   await ensureOutreachSchema(dbPool);
 
-  await dbPool.query(
+  const { rows } = await dbPool.query<{
+    id: string;
+    note: string;
+    created_by: string | null;
+    created_at: string;
+  }>(
     `insert into lead_notes (lead_id, note, created_by)
-     values ($1, $2, $3)`,
+     values ($1, $2, $3)
+     returning id, note, created_by, created_at`,
     [id, note, session.user?.email ?? null]
   );
 
@@ -38,5 +44,5 @@ export async function POST(
     ]
   );
 
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ ok: true, note: rows[0] });
 }

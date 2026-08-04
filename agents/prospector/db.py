@@ -110,6 +110,16 @@ def update_lead_scored(conn, lead_id: str, payload: dict):
                 current_screenshot_url = %(screenshot)s,
                 analysis_status = %(analysis_status)s,
                 analysis_error = %(analysis_error)s,
+                contact_email = coalesce(nullif(contact_email, ''), %(contact_email)s),
+                contact_name = coalesce(nullif(contact_name, ''), %(contact_name)s),
+                contact_role = coalesce(nullif(contact_role, ''), %(contact_role)s),
+                contact_email_source = case
+                    when nullif(%(contact_email)s, '') is not null
+                         and (contact_email is null or contact_email = '')
+                    then %(contact_email_source)s
+                    else contact_email_source
+                end,
+                contact_enrichment = coalesce(%(contact_enrichment)s::jsonb, contact_enrichment),
                 analyzed_at = case when %(analysis_status)s = 'complete' then now() else analyzed_at end,
                 updated_at = now()
             where id = %(lead_id)s
@@ -131,6 +141,13 @@ def update_lead_scored(conn, lead_id: str, payload: dict):
                 "screenshot": payload.get("current_screenshot_url"),
                 "analysis_status": payload.get("analysis_status", "complete"),
                 "analysis_error": payload.get("analysis_error"),
+                "contact_email": payload.get("contact_email"),
+                "contact_name": payload.get("contact_name"),
+                "contact_role": payload.get("contact_role"),
+                "contact_email_source": payload.get("contact_email_source"),
+                "contact_enrichment": json.dumps(payload.get("contact_enrichment"))
+                if payload.get("contact_enrichment") is not None
+                else None,
             },
         )
 
