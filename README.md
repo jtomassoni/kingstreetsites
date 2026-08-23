@@ -56,7 +56,8 @@ AUTO_REPLY_FROM_EMAIL=hello@yourdomain.com
 - `CONTACT_FROM_EMAIL` required sender address for notifications.
 - `AUTO_REPLY_FROM_EMAIL` optional sender for prospect auto-replies.
 - `NEXT_PUBLIC_SITE_URL` used for admin logout redirect handling.
-- `DATABASE_URL` optional for future Neon integration.
+- `DATABASE_URL` — Neon pooled connection string (use `-pooler` host).
+- `DATABASE_URL_UNPOOLED` — direct Neon URL for `npm run db:schema` and migrations.
 
 ## Neon usage
 Neon is supported with a minimal schema for CRM lead persistence.

@@ -36,7 +36,7 @@ function loadDotEnv(path) {
 }
 
 loadDotEnv(envPath);
-const dbUrl = process.env.DATABASE_URL;
+const dbUrl = process.env.DATABASE_URL_UNPOOLED ?? process.env.DATABASE_URL;
 if (!dbUrl) {
   console.error("DATABASE_URL is not set in .env");
   process.exit(1);

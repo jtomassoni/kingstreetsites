@@ -3,10 +3,9 @@ import PostgresAdapter from "@auth/pg-adapter";
 import Credentials from "next-auth/providers/credentials";
 import FacebookProvider from "next-auth/providers/facebook";
 import { timingSafeEqual } from "crypto";
-import { Pool } from "pg";
+import { getDbPool } from "@/lib/db";
 import authConfig from "./auth.config";
 
-const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 const hasMetaOAuth = Boolean(process.env.AUTH_FACEBOOK_ID && process.env.AUTH_FACEBOOK_SECRET);
 
 function adminEmail(): string | null {
@@ -26,7 +25,7 @@ function safeEqual(a: string, b: string): boolean {
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   ...authConfig,
-  adapter: PostgresAdapter(pool),
+  ...(hasMetaOAuth ? { adapter: PostgresAdapter(getDbPool()) } : {}),
   session: { strategy: "jwt" },
   trustHost: true,
   providers: [

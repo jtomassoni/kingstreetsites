@@ -9,3 +9,4 @@ npm-debug.log*
 agents/prospector/screenshots/
 **/*.log
 tsconfig.tsbuildinfo
+.vercel

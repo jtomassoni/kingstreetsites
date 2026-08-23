@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint . --ext .ts,.tsx",
     "migrate": "node scripts/psql-with-env.mjs lib/db-migrate-scrape-analyze.sql",
+    "db:schema": "node scripts/psql-with-env.mjs lib/db-schema.sql",
     "migrate:lead-crm": "node scripts/psql-with-env.mjs lib/db-migrate-lead-crm.sql",
     "migrate:billing": "node scripts/psql-with-env.mjs lib/db-migrate-billing.sql",
     "migrate:franchise-groups": "node scripts/psql-with-env.mjs lib/db-migrate-franchise-groups.sql",
@@ -15,7 +16,6 @@
   },
   "dependencies": {
     "@auth/pg-adapter": "^1.11.2",
-    "@neondatabase/serverless": "^0.10.4",
     "@types/pg": "^8.20.0",
     "@vercel/blob": "^2.8.0",
     "lighthouse": "^13.1.0",

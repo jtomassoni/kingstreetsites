@@ -1,6 +1,6 @@
 import { auth } from "@/auth";
 import { NextRequest, NextResponse } from "next/server";
-import { Pool } from "pg";
+import { getDbPool } from "@/lib/db";
 import {
   connectionsFromProviders,
   REQUIRED_SOCIAL_PLATFORMS,
@@ -12,29 +12,25 @@ export async function GET() {
   const email = session?.user?.email;
   if (!email) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const pool = new Pool({ connectionString: process.env.DATABASE_URL });
-  try {
-    const { rows } = await pool.query(
-      `select a.provider, u."emailVerified" as connected_at
-       from account a
-       join users u on u.id = a."userId"
-       where u.email = $1`,
-      [email]
-    );
+  const pool = getDbPool();
+  const { rows } = await pool.query(
+    `select a.provider, u."emailVerified" as connected_at
+     from account a
+     join users u on u.id = a."userId"
+     where u.email = $1`,
+    [email]
+  );
 
-    const metadata = Object.fromEntries(
-      rows.map((row: { provider: string; connected_at: string | null }) => [
-        row.provider,
-        { connected_at: row.connected_at, updated_at: row.connected_at },
-      ])
-    );
+  const metadata = Object.fromEntries(
+    rows.map((row: { provider: string; connected_at: string | null }) => [
+      row.provider,
+      { connected_at: row.connected_at, updated_at: row.connected_at },
+    ])
+  );
 
-    return NextResponse.json({
-      connections: connectionsFromProviders(rows.map((row: { provider: string }) => row.provider), metadata),
-    });
-  } finally {
-    await pool.end();
-  }
+  return NextResponse.json({
+    connections: connectionsFromProviders(rows.map((row: { provider: string }) => row.provider), metadata),
+  });
 }
 
 export async function POST(req: NextRequest) {
@@ -50,28 +46,24 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid platform" }, { status: 400 });
   }
 
-  const pool = new Pool({ connectionString: process.env.DATABASE_URL });
-  try {
-    const userRes = await pool.query(`select id from users where email = $1 limit 1`, [email]);
-    const userId = userRes.rows[0]?.id as string | undefined;
-    if (!userId) return NextResponse.json({ error: "User not found" }, { status: 404 });
+  const pool = getDbPool();
+  const userRes = await pool.query(`select id from users where email = $1 limit 1`, [email]);
+  const userId = userRes.rows[0]?.id as string | undefined;
+  if (!userId) return NextResponse.json({ error: "User not found" }, { status: 404 });
 
-    if (!connected) {
-      await pool.query(
-        `delete from account where "userId" = $1 and provider = $2`,
-        [userId, platform]
-      );
-    }
-
-    const { rows } = await pool.query(
-      `select provider from account where "userId" = $1`,
-      [userId]
+  if (!connected) {
+    await pool.query(
+      `delete from account where "userId" = $1 and provider = $2`,
+      [userId, platform]
     );
-    return NextResponse.json({
-      ok: true,
-      connections: connectionsFromProviders(rows.map((row: { provider: string }) => row.provider)),
-    });
-  } finally {
-    await pool.end();
   }
+
+  const { rows } = await pool.query(
+    `select provider from account where "userId" = $1`,
+    [userId]
+  );
+  return NextResponse.json({
+    ok: true,
+    connections: connectionsFromProviders(rows.map((row: { provider: string }) => row.provider)),
+  });
 }

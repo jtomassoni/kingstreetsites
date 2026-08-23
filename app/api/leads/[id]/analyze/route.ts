@@ -1,10 +1,9 @@
 import { auth } from "@/auth";
 import { NextRequest, NextResponse } from "next/server";
 import { spawn } from "child_process";
-import { Pool } from "pg";
+import { getDbPool } from "@/lib/db";
 import fs from "fs";
 import path from "path";
-import { dbPool } from "@/lib/db";
 import { ensureOutreachSchema } from "@/lib/outreach-schema";
 
 export async function POST(
@@ -18,9 +17,10 @@ export async function POST(
 
   const { id } = await params;
 
-  await ensureOutreachSchema(dbPool);
+  const pool = getDbPool();
+  await ensureOutreachSchema(pool);
 
-  const leadResult = await dbPool.query(
+  const leadResult = await pool.query(
     `select id, business_name, analysis_status
      from leads
      where id = $1`,
@@ -43,7 +43,7 @@ export async function POST(
 
   // Ensure a failed lead is eligible for the pending queue as well as lead_id targeting.
   if (lead.analysis_status === "failed") {
-    await dbPool.query(
+    await pool.query(
       `update leads
        set analysis_status = 'pending', analysis_error = null, updated_at = now()
        where id = $1`,
@@ -51,15 +51,13 @@ export async function POST(
     );
   }
 
-  const pool = new Pool({ connectionString: process.env.DATABASE_URL });
   const { rows } = await pool.query(
     "insert into analyzer_runs (zip, metro) values ('ALL', 'ALL') returning id",
     []
   );
-  await pool.end();
   const runId = rows[0].id as string;
 
-  await dbPool.query(
+  await pool.query(
     `insert into lead_timeline_events (lead_id, event_type, title, body, metadata)
      values ($1, 'analysis_started', 'Site analysis started', $2, $3::jsonb)`,
     [
@@ -112,15 +110,10 @@ export async function POST(
       }
       logFd = null;
     }
-    const failPool = new Pool({ connectionString: process.env.DATABASE_URL });
-    try {
-      await failPool.query(
-        `update analyzer_runs set status = 'failed', error = $1, finished_at = now() where id = $2`,
-        [`Could not start analyzer worker: ${err instanceof Error ? err.message : String(err)}`, runId]
-      );
-    } finally {
-      await failPool.end();
-    }
+    await getDbPool().query(
+      `update analyzer_runs set status = 'failed', error = $1, finished_at = now() where id = $2`,
+      [`Could not start analyzer worker: ${err instanceof Error ? err.message : String(err)}`, runId]
+    );
   });
 
   child.unref();

@@ -1,34 +1,26 @@
-import { Pool } from "pg";
+import { getDbPool } from "@/lib/db";
 import { revalidatePath } from "next/cache";
 import { crm } from "@/lib/admin-ui";
 
 async function getSettings(): Promise<Record<string, boolean>> {
-  const pool = new Pool({ connectionString: process.env.DATABASE_URL });
-  try {
-    const { rows } = await pool.query(`select key, value from settings`);
-    const out: Record<string, boolean> = {};
-    for (const r of rows) out[r.key] = r.value === true || r.value === "true";
-    return out;
-  } finally {
-    await pool.end();
-  }
+  const pool = getDbPool();
+  const { rows } = await pool.query(`select key, value from settings`);
+  const out: Record<string, boolean> = {};
+  for (const r of rows) out[r.key] = r.value === true || r.value === "true";
+  return out;
 }
 
 async function toggleSetting(key: string, value: boolean) {
   "use server";
-  const pool = new Pool({ connectionString: process.env.DATABASE_URL });
-  try {
-    await pool.query(
-      `update settings set value = $1::jsonb, updated_at = now() where key = $2`,
-      [JSON.stringify(value), key]
-    );
-    await pool.query(
-      `insert into audit_log (agent, action, payload) values ('jt', $1, $2::jsonb)`,
-      [`toggle_setting`, JSON.stringify({ key, value })]
-    );
-  } finally {
-    await pool.end();
-  }
+  const pool = getDbPool();
+  await pool.query(
+    `update settings set value = $1::jsonb, updated_at = now() where key = $2`,
+    [JSON.stringify(value), key]
+  );
+  await pool.query(
+    `insert into audit_log (agent, action, payload) values ('jt', $1, $2::jsonb)`,
+    [`toggle_setting`, JSON.stringify({ key, value })]
+  );
   revalidatePath("/admin/settings");
   revalidatePath("/admin/leads");
 }
