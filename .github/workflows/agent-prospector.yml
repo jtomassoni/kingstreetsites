@@ -28,6 +28,20 @@ jobs:
       - name: Install Python deps
         run: pip install -r agents/requirements-prospector.txt
 
+      - name: Check secrets
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          GOOGLE_PLACES_API_KEY: ${{ secrets.GOOGLE_PLACES_API_KEY }}
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "::error::Missing GitHub Actions secret DATABASE_URL (Neon pooled connection string)."
+            exit 1
+          fi
+          if [ -z "$GOOGLE_PLACES_API_KEY" ]; then
+            echo "::error::Missing GitHub Actions secret GOOGLE_PLACES_API_KEY."
+            exit 1
+          fi
+
       - name: Run prospector
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}

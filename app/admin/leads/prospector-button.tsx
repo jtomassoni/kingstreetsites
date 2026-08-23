@@ -213,6 +213,7 @@ export default function ProspectorButton({ pipeline }: { pipeline: PipelineSumma
   const [open, setOpen] = useState(false);
   const [selected, setSelected] = useState("Denver - All configured ZIPs");
   const [starting, setStarting] = useState(false);
+  const [startError, setStartError] = useState<string | null>(null);
   const [run, setRun] = useState<RunStatus | null>(null);
   const [activeEvent, setActiveEvent] = useState<string | null>(null);
 
@@ -237,15 +238,19 @@ export default function ProspectorButton({ pipeline }: { pipeline: PipelineSumma
 
   async function startRun() {
     setStarting(true);
+    setStartError(null);
     const { zip, metro } = METRO_ZIPS[selected];
     const res = await fetch("/api/prospector", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ zip, metro }),
     });
-    const data = await res.json();
-    if (res.ok && data.runId) {
+    const data = await res.json().catch(() => ({}));
+    if (data.runId) {
       await fetchRun(data.runId);
+    }
+    if (!res.ok) {
+      setStartError(typeof data.error === "string" ? data.error : "Could not start scrape.");
     }
     setStarting(false);
     if (res.ok) setOpen(false);
@@ -587,6 +592,11 @@ export default function ProspectorButton({ pipeline }: { pipeline: PipelineSumma
           </div>
 
           <div className="mt-auto flex shrink-0 flex-col gap-2 border-t border-crm-border pt-3">
+            {startError ? (
+              <div className="rounded-lg border border-red-500/30 bg-red-950/40 px-3 py-2 text-xs text-red-200">
+                {startError}
+              </div>
+            ) : null}
             <button
               type="button"
               onClick={startRun}

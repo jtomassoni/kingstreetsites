@@ -356,7 +356,14 @@ def analyze_one(row: dict, screenshot_dir: str) -> dict:
 
 
 def run(run_id: str, limit: int, lead_id: str | None = None):
-    db_url = os.environ["DATABASE_URL"]
+    db_url = (os.environ.get("DATABASE_URL") or "").strip()
+    if not db_url or "localhost" in db_url or "127.0.0.1" in db_url:
+        print(
+            "[analyzer] FATAL: DATABASE_URL must be your Neon connection string. "
+            "Add it under GitHub → Settings → Secrets and variables → Actions."
+        )
+        sys.exit(1)
+
     screenshot_dir = str(_PROSPECTOR / "screenshots")
     os.makedirs(screenshot_dir, exist_ok=True)
 

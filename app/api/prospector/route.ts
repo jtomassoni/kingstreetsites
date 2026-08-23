@@ -34,7 +34,7 @@ export async function POST(req: NextRequest) {
       `update prospector_runs set status = 'failed', error = $1, finished_at = now() where id = $2`,
       [started.error, runId]
     );
-    return NextResponse.json({ error: started.error }, { status: 503 });
+    return NextResponse.json({ error: started.error, runId }, { status: 503 });
   }
 
   return NextResponse.json({ ok: true, runId });

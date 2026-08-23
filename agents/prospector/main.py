@@ -82,10 +82,13 @@ def run(zip_code: str, metro: str, run_id: str = ""):
 
     print(f"[prospector] Scrape run: ZIP={zip_code} metro={metro} run_id={run_id or 'none'}")
 
-    try:
-        db_url = os.environ["DATABASE_URL"]
-    except KeyError:
-        print("[prospector] FATAL: DATABASE_URL is not set")
+    db_url = (os.environ.get("DATABASE_URL") or "").strip()
+    if not db_url or "localhost" in db_url or "127.0.0.1" in db_url:
+        print(
+            "[prospector] FATAL: DATABASE_URL must be your Neon connection string. "
+            "Add it under GitHub → Settings → Secrets and variables → Actions "
+            "(secret name: DATABASE_URL)."
+        )
         sys.exit(1)
 
     conn = get_conn(db_url)

@@ -85,7 +85,7 @@ export async function POST(
       `update analyzer_runs set status = 'failed', error = $1, finished_at = now() where id = $2`,
       [started.error, runId]
     );
-    return NextResponse.json({ error: started.error }, { status: 503 });
+    return NextResponse.json({ error: started.error, runId, leadId: id }, { status: 503 });
   }
 
   return NextResponse.json({ ok: true, runId, leadId: id });

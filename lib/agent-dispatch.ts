@@ -9,6 +9,9 @@ function shouldUseGitHubAgents(): boolean {
 }
 
 function githubRepo(): string {
+  const owner = process.env.VERCEL_GIT_REPO_OWNER;
+  const slug = process.env.VERCEL_GIT_REPO_SLUG;
+  if (owner && slug) return `${owner}/${slug}`;
   return process.env.GITHUB_REPOSITORY ?? "jtomassoni/kingstreetsites";
 }
 
@@ -22,6 +25,13 @@ async function dispatchGitHubWorkflow(
       ok: false,
       error:
         "Production workers run via GitHub Actions. Set GITHUB_AGENT_TOKEN on Vercel (fine-grained PAT with Actions: read/write on this repo). Also add DATABASE_URL and GOOGLE_PLACES_API_KEY as GitHub repo secrets.",
+    };
+  }
+  if (token.length < 40) {
+    return {
+      ok: false,
+      error:
+        "GITHUB_AGENT_TOKEN on Vercel looks wrong (too short). Paste the full GitHub token from your PAT page — fine-grained tokens are usually 80+ characters. Then redeploy.",
     };
   }
 
@@ -42,6 +52,20 @@ async function dispatchGitHubWorkflow(
   if (res.status === 204) return { ok: true };
 
   const body = await res.text().catch(() => "");
+  if (res.status === 403) {
+    return {
+      ok: false,
+      error:
+        "GitHub token cannot trigger Actions (403). Edit your fine-grained PAT → Repository permissions → Actions: Read and write, then update GITHUB_AGENT_TOKEN on Vercel and redeploy.",
+    };
+  }
+  if (res.status === 401) {
+    return {
+      ok: false,
+      error:
+        "GitHub token rejected (401). Regenerate GITHUB_AGENT_TOKEN and paste the full PAT into Vercel, then redeploy.",
+    };
+  }
   return {
     ok: false,
     error: `Could not start GitHub Actions worker (${res.status}). ${body.slice(0, 400)}`.trim(),

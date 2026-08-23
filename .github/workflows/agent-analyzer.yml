@@ -39,6 +39,15 @@ jobs:
       - name: Install Playwright browser
         run: python3 -m playwright install chromium --with-deps
 
+      - name: Check secrets
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "::error::Missing GitHub Actions secret DATABASE_URL (Neon pooled connection string)."
+            exit 1
+          fi
+
       - name: Run analyzer
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}

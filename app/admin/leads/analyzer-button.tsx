@@ -179,6 +179,7 @@ export default function AnalyzerButton({ pipeline }: { pipeline: PipelineSummary
   const [open, setOpen] = useState(false);
   const [limit, setLimit] = useState(200);
   const [starting, setStarting] = useState(false);
+  const [startError, setStartError] = useState<string | null>(null);
   const [run, setRun] = useState<RunStatus | null>(null);
 
   const fetchRun = useCallback(async (id: string) => {
@@ -202,14 +203,18 @@ export default function AnalyzerButton({ pipeline }: { pipeline: PipelineSummary
 
   async function startRun() {
     setStarting(true);
+    setStartError(null);
     const res = await fetch("/api/analyzer", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ limit }),
     });
-    const data = await res.json();
-    if (res.ok && data.runId) {
+    const data = await res.json().catch(() => ({}));
+    if (data.runId) {
       await fetchRun(data.runId);
+    }
+    if (!res.ok) {
+      setStartError(typeof data.error === "string" ? data.error : "Could not start analysis.");
     }
     setStarting(false);
     if (res.ok) setOpen(false);
@@ -507,6 +512,11 @@ export default function AnalyzerButton({ pipeline }: { pipeline: PipelineSummary
           </div>
 
           <div className="mt-auto flex shrink-0 flex-col gap-2 border-t border-crm-border pt-3">
+            {startError ? (
+              <div className="rounded-lg border border-red-500/30 bg-red-950/40 px-3 py-2 text-xs text-red-200">
+                {startError}
+              </div>
+            ) : null}
             <button
               type="button"
               onClick={startRun}
