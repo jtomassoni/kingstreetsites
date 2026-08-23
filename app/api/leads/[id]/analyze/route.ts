@@ -49,7 +49,9 @@ export async function POST(
   }
 
   const { rows } = await pool.query(
-    "insert into analyzer_runs (zip, metro) values ('ALL', 'ALL') returning id",
+    `insert into analyzer_runs (zip, metro, status, current_business)
+     values ('ALL', 'ALL', 'running', 'Queued…')
+     returning id`,
     []
   );
   const runId = rows[0].id as string;
@@ -87,6 +89,16 @@ export async function POST(
     );
     return NextResponse.json({ error: started.error, runId, leadId: id }, { status: 503 });
   }
+
+  await pool.query(
+    `update analyzer_runs set current_business = $1 where id = $2 and status = 'running'`,
+    [
+      process.env.VERCEL || process.env.USE_GITHUB_AGENTS === "1"
+        ? "Queued on GitHub Actions…"
+        : "Worker starting…",
+      runId,
+    ]
+  );
 
   return NextResponse.json({ ok: true, runId, leadId: id });
 }

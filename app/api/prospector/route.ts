@@ -12,7 +12,9 @@ export async function POST(req: NextRequest) {
 
   const pool = getDbPool();
   const { rows } = await pool.query(
-    "insert into prospector_runs (zip, metro) values ($1, $2) returning id",
+    `insert into prospector_runs (zip, metro, status, current_business)
+     values ($1, $2, 'running', 'Queued…')
+     returning id`,
     [zip, metro ?? "Denver"]
   );
   const runId = rows[0].id as string;
@@ -36,6 +38,16 @@ export async function POST(req: NextRequest) {
     );
     return NextResponse.json({ error: started.error, runId }, { status: 503 });
   }
+
+  await pool.query(
+    `update prospector_runs set current_business = $1 where id = $2 and status = 'running'`,
+    [
+      process.env.VERCEL || process.env.USE_GITHUB_AGENTS === "1"
+        ? "Queued on GitHub Actions…"
+        : "Worker starting…",
+      runId,
+    ]
+  );
 
   return NextResponse.json({ ok: true, runId });
 }

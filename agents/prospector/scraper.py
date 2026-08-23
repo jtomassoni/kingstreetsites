@@ -263,13 +263,16 @@ def run_lighthouse(url: str) -> dict:
     """Run Lighthouse CLI and return key scores."""
     scores = {"performance": None, "accessibility": None}
     try:
-        lighthouse_bin = Path(__file__).parent.parent.parent / "node_modules" / ".bin" / "lighthouse"
+        import shutil
+
+        local_bin = Path(__file__).parent.parent.parent / "node_modules" / ".bin" / "lighthouse"
+        lighthouse_bin = str(local_bin) if local_bin.exists() else (shutil.which("lighthouse") or "lighthouse")
         with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as f:
             out_path = f.name
 
         result = subprocess.run(
             [
-                str(lighthouse_bin), url,
+                lighthouse_bin, url,
                 "--output=json", f"--output-path={out_path}",
                 "--chrome-flags=--headless --no-sandbox",
                 "--only-categories=performance,accessibility",

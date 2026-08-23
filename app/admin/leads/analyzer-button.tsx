@@ -135,7 +135,7 @@ function analyzerCompleteCopy(run: RunStatus): { headline: string; detail: strin
   if (run.processed > 0) {
     return {
       headline: "Run finished — no rows saved",
-      detail: `Visited ${run.processed.toLocaleString()} site(s) but wrote 0 updates. If that is unexpected, check agents/analyzer/worker.log.`,
+      detail: `Visited ${run.processed.toLocaleString()} site(s) but wrote 0 updates. If that is unexpected, check GitHub Actions → Agent — Analyzer.`,
       strong: false,
     };
   }
@@ -327,7 +327,9 @@ export default function AnalyzerButton({ pipeline }: { pipeline: PipelineSummary
                 <p className="text-[9px] font-semibold uppercase tracking-[0.18em] text-red-300/80 sm:text-[10px] sm:tracking-[0.2em]">Analyze leads</p>
                 <h3 className="mt-0.5 text-base font-bold text-crm-text sm:mt-1 sm:text-lg">Run failed</h3>
                 <p className="mt-1 line-clamp-3 break-words text-xs text-red-200/90 sm:mt-2 sm:text-sm">{run.error ?? "Unknown error"}</p>
-                <p className="mt-1 text-[10px] text-crm-faint sm:mt-2 sm:text-xs">See agents/analyzer/worker.log for full output.</p>
+                <p className="mt-1 text-[10px] text-crm-faint sm:mt-2 sm:text-xs">
+                  Check GitHub Actions → Agent — Analyzer for logs.
+                </p>
               </div>
             </div>
             <button

@@ -50,7 +50,7 @@ export default function RunAnalysisButton({
       } else if (next.status === "failed") {
         toast({
           title: "Site analysis failed",
-          description: next.error ?? "Check the analyzer worker log.",
+          description: next.error ?? "Check GitHub Actions → Agent — Analyzer.",
           tone: "error",
         });
       }
