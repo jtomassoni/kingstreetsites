@@ -7,7 +7,7 @@ export const crm = {
 
   /** Record detail (single lead / customer) */
   recordHeader:
-    "mb-6 border-b border-crm-border pb-5",
+    "mb-6 border-b border-crm-border/60 pb-5",
   recordTitle: "text-[1.375rem] font-semibold leading-snug tracking-tight text-crm-text",
   recordMeta: "mt-1 text-sm text-crm-muted",
   recordActions: "flex flex-wrap items-center gap-2",
@@ -18,17 +18,18 @@ export const crm = {
   workSidebar: "min-w-0 space-y-4 lg:col-start-1 lg:row-start-1 lg:sticky lg:top-[4.5rem] lg:self-start",
 
   /** Surfaces */
-  panel: "overflow-hidden rounded-xl border border-crm-border bg-crm-surface",
-  panelHeader: "border-b border-crm-border px-4 py-3",
+  panel:
+    "overflow-hidden rounded-xl border border-crm-border/70 bg-crm-surface/90 shadow-[0_1px_0_rgba(255,255,255,0.04)_inset,0_12px_40px_-20px_rgba(0,0,0,0.45)] backdrop-blur-sm",
+  panelHeader: "border-b border-crm-border/60 px-4 py-3",
   panelBody: "p-4",
   panelTitle: "text-sm font-medium text-crm-text",
   panelHint: "text-xs text-crm-faint",
 
-  card: "rounded-xl border border-crm-border bg-crm-surface p-4",
+  card: "rounded-xl border border-crm-border/70 bg-crm-raised/40 p-4",
   sectionTitle: "mb-3 text-xs font-medium uppercase tracking-wide text-crm-faint",
 
   /** Nav tabs — underline style */
-  tabs: "flex gap-5 border-b border-crm-border",
+  tabs: "flex gap-5 border-b border-crm-border/60",
   tab: (active: boolean) =>
     active
       ? "relative -mb-px border-b-2 border-crm-accent pb-2.5 text-sm font-medium text-crm-text"
@@ -44,18 +45,20 @@ export const crm = {
   field: "space-y-1.5",
   fieldLabel: "block text-xs font-medium text-crm-muted",
   input:
-    "w-full rounded-lg border border-crm-border bg-crm-bg px-3 py-2 text-sm text-crm-text outline-none transition placeholder:text-crm-faint focus:border-crm-accent/60 focus:ring-2 focus:ring-crm-accent/15",
+    "w-full rounded-lg border border-crm-border/80 bg-crm-raised px-3 py-2 text-sm text-crm-text outline-none transition placeholder:text-crm-faint focus:border-crm-accent/50 focus:ring-2 focus:ring-crm-accent/20 [color-scheme:dark]",
+  textarea:
+    "w-full min-h-[6.5rem] resize-y rounded-lg border border-crm-border/80 bg-crm-raised px-3 py-2 text-sm text-crm-text outline-none transition placeholder:text-crm-faint focus:border-crm-accent/50 focus:ring-2 focus:ring-crm-accent/20 [color-scheme:dark]",
   btn:
-    "inline-flex items-center justify-center rounded-lg border border-crm-border bg-crm-raised px-3 py-2 text-sm font-medium text-crm-text transition hover:bg-crm-border/50 disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-crm-raised",
+    "inline-flex items-center justify-center rounded-lg border border-crm-border/80 bg-crm-raised/80 px-3 py-2 text-sm font-medium text-crm-text transition hover:bg-crm-raised hover:border-crm-border disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-crm-raised/80",
   btnPrimary:
     "inline-flex items-center justify-center rounded-lg bg-crm-text px-3 py-2 text-sm font-medium text-crm-bg transition hover:opacity-90 disabled:cursor-not-allowed disabled:bg-crm-raised disabled:text-crm-faint disabled:opacity-100 disabled:hover:opacity-100",
   btnGhost: "text-sm font-medium text-crm-muted transition hover:text-crm-text",
   formActions: "flex flex-wrap items-center gap-2 pt-1",
 
   /** List rows */
-  list: "divide-y divide-crm-border overflow-hidden rounded-xl border border-crm-border bg-crm-surface",
+  list: "divide-y divide-crm-border/60 overflow-hidden rounded-xl border border-crm-border/70 bg-crm-surface/90",
   listRow:
-    "flex flex-col gap-3 px-4 py-3.5 transition hover:bg-crm-raised/50 sm:flex-row sm:items-center sm:gap-4",
+    "flex flex-col gap-3 px-4 py-3.5 transition hover:bg-crm-raised/40 sm:flex-row sm:items-center sm:gap-4",
 
   /** Misc */
   link: "font-medium text-crm-accent hover:text-crm-accent-hover underline-offset-2 hover:underline",
@@ -65,33 +68,37 @@ export const crm = {
 
   badge: (tone: "neutral" | "good" | "warn" | "bad" = "neutral") => {
     const tones = {
-      neutral: "bg-crm-raised text-crm-muted",
-      good: "bg-emerald-500/10 text-emerald-400",
-      warn: "bg-amber-500/10 text-amber-400",
-      bad: "bg-red-500/10 text-red-400",
+      neutral: "bg-crm-raised/80 text-crm-muted",
+      good: "bg-emerald-500/12 text-emerald-300",
+      warn: "bg-amber-500/12 text-amber-300",
+      bad: "bg-red-500/12 text-red-300",
     };
     return `inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium ${tones[tone]}`;
   },
 
   /** Modals */
   modalBackdrop: "fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6",
-  modalOverlay: "absolute inset-0 bg-black/60 backdrop-blur-sm",
-  modalPanel: "relative flex max-h-[min(90vh,48rem)] w-full max-w-lg flex-col overflow-hidden rounded-xl border border-crm-border bg-crm-surface shadow-2xl",
-  modalPanelWide: "relative flex max-h-[min(90vh,48rem)] w-full max-w-2xl flex-col overflow-hidden rounded-xl border border-crm-border bg-crm-surface shadow-2xl",
-  modalHeader: "shrink-0 border-b border-crm-border px-5 py-4",
+  modalOverlay: "absolute inset-0 bg-[#0a0e14]/70 backdrop-blur-sm",
+  modalPanel:
+    "relative flex max-h-[min(90vh,48rem)] w-full max-w-lg flex-col overflow-hidden rounded-xl border border-crm-border/70 bg-crm-surface shadow-[0_1px_0_rgba(255,255,255,0.05)_inset,0_24px_80px_-20px_rgba(0,0,0,0.65)]",
+  modalPanelWide:
+    "relative flex max-h-[min(90vh,48rem)] w-full max-w-2xl flex-col overflow-hidden rounded-xl border border-crm-border/70 bg-crm-surface shadow-[0_1px_0_rgba(255,255,255,0.05)_inset,0_24px_80px_-20px_rgba(0,0,0,0.65)]",
+  modalHeader: "shrink-0 border-b border-crm-border/60 px-5 py-4",
   modalBody: "flex-1 overflow-y-auto px-5 py-4",
   modalFooter:
-    "shrink-0 flex flex-col-reverse gap-2 border-t border-crm-border px-5 py-4 sm:flex-row sm:justify-end",
+    "shrink-0 flex flex-col-reverse gap-2 border-t border-crm-border/60 px-5 py-4 sm:flex-row sm:justify-end",
 
   /** Stats */
   statGrid: "mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4",
-  statTile: "flex min-h-[4.5rem] flex-col rounded-lg border border-crm-border bg-crm-surface p-3 sm:min-h-[5rem]",
+  statTile:
+    "flex min-h-[4.5rem] flex-col rounded-lg border border-crm-border/70 bg-crm-surface/80 p-3 sm:min-h-[5rem]",
   statLabel: "text-xs text-crm-faint",
   statValue: "mt-1 text-xl font-semibold tabular-nums tracking-tight text-crm-text",
   statHint: "mt-auto pt-2 text-xs leading-snug text-crm-faint",
 
   /** Pipeline tool cards */
-  toolCard: "flex min-h-[240px] w-full flex-col gap-3 rounded-xl border border-crm-border bg-crm-surface p-4 sm:min-h-[252px]",
+  toolCard:
+    "flex min-h-[240px] w-full flex-col gap-3 rounded-xl border border-crm-border/70 bg-crm-surface/90 p-4 shadow-[0_1px_0_rgba(255,255,255,0.03)_inset] sm:min-h-[252px]",
 } as const;
 
 function gradeTone(grade: string | null | undefined): "good" | "warn" | "bad" | "neutral" {

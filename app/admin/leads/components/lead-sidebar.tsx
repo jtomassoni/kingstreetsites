@@ -1,5 +1,6 @@
 import Image from "next/image";
 import ContactPersonField from "./contact-person-field";
+import RunAnalysisButton from "./run-analysis-button";
 import { crm, gradeTone } from "@/lib/admin-ui";
 
 type LeadSidebarProps = {
@@ -100,8 +101,11 @@ export default function LeadSidebar({ lead, brief, hasScreenshot }: LeadSidebarP
           ) : null}
         </div>
 
-        {lead.analysis_status === "pending" ? (
-          <p className="text-sm text-crm-muted">Not analyzed yet. Run analyze from Find leads.</p>
+        {lead.analysis_status === "pending" || lead.analysis_status === "failed" ? (
+          <RunAnalysisButton
+            leadId={lead.id}
+            analysisStatus={lead.analysis_status ?? "pending"}
+          />
         ) : (
           <div className="space-y-3">
             <div className="flex items-center gap-3">
@@ -148,7 +152,7 @@ export default function LeadSidebar({ lead, brief, hasScreenshot }: LeadSidebarP
         )}
       </section>
 
-      {lead.analysis_status !== "pending" ? (
+      {lead.analysis_status === "complete" ? (
         <section className={crm.card}>
           <h2 className={crm.sectionTitle}>Next step</h2>
           <p className="text-sm leading-relaxed text-crm-muted">{brief.nextStep}</p>

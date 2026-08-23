@@ -9,9 +9,17 @@ import { crm } from "@/lib/admin-ui";
 const METRO_ZIPS: Record<string, { zip: string; metro: string }> = {
   "Denver - All configured ZIPs": { zip: "ALL", metro: "Denver" },
   "Baltimore - All configured ZIPs": { zip: "ALL", metro: "Baltimore" },
-  "Denver - Highland (80211)": { zip: "80211", metro: "Denver" },
   "Denver - LoDo (80202)": { zip: "80202", metro: "Denver" },
+  "Denver - Capitol Hill (80203)": { zip: "80203", metro: "Denver" },
   "Denver - RiNo (80205)": { zip: "80205", metro: "Denver" },
+  "Denver - Highland (80211)": { zip: "80211", metro: "Denver" },
+  "Denver - Wash Park (80209)": { zip: "80209", metro: "Denver" },
+  "Denver - Park Hill (80207)": { zip: "80207", metro: "Denver" },
+  "Denver - Sheridan (80236)": { zip: "80236", metro: "Denver" },
+  "Denver - Central Park (80238)": { zip: "80238", metro: "Denver" },
+  "Denver - Lakewood (80226)": { zip: "80226", metro: "Denver" },
+  "Arvada (80002)": { zip: "80002", metro: "Denver" },
+  "Littleton (80120)": { zip: "80120", metro: "Denver" },
   "Baltimore - Fells Point (21231)": { zip: "21231", metro: "Baltimore" },
   "Baltimore - Canton (21224)": { zip: "21224", metro: "Baltimore" },
   "Baltimore - Federal Hill (21230)": { zip: "21230", metro: "Baltimore" },
@@ -526,7 +534,7 @@ export default function ProspectorButton({ pipeline }: { pipeline: PipelineSumma
             <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-teal-400/90">Step 1 · Discover</p>
             <h3 className="mt-1.5 text-base font-bold tracking-tight text-crm-text sm:mt-2 sm:text-lg">Scrape from Google Places</h3>
             <p className="mt-1.5 text-xs leading-snug text-crm-muted sm:mt-2 sm:text-sm sm:leading-relaxed">
-              Add or refresh restaurants for a metro or ZIP. Each row starts as{" "}
+              Add or refresh bars and restaurants for a metro or ZIP. Each row starts as{" "}
               <span className="font-medium text-amber-200/85">analysis pending</span> until you run Analyze.
             </p>
             <div className="mt-3 grid grid-cols-2 gap-2">

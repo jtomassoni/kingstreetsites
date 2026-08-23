@@ -53,7 +53,7 @@ export default async function LeadsPage({
               <>Closed-won accounts. Conversation and billing live on each record.</>
             ) : (
               <>
-                Prioritize restaurants with weak sites.{" "}
+                Prioritize neighborhood bars and pubs with weak or missing sites.{" "}
                 <Link href="/admin/leads/pipeline" className={crm.link}>
                   Find leads
                 </Link>{" "}
@@ -124,6 +124,7 @@ export default async function LeadsPage({
             contact_name?: string | null;
             contact_email?: string | null;
             phone?: string | null;
+            place_types?: string[] | null;
             outstanding_cents?: number;
             collected_cents?: number;
             invoice_count?: number;
@@ -156,6 +157,9 @@ export default async function LeadsPage({
               ) : null}
 
               <div className="flex flex-wrap items-center gap-3 sm:shrink-0">
+                {!isCustomers && lead.place_types?.includes("bar") ? (
+                  <span className={crm.badge("neutral")}>Bar</span>
+                ) : null}
                 {!isCustomers && lead.analysis_status !== "pending" && lead.site_grade ? (
                   <span className={crm.badge(gradeTone(lead.site_grade))}>{lead.site_grade}</span>
                 ) : null}

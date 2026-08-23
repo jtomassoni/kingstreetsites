@@ -2,6 +2,7 @@ import { auth, signOut } from "@/auth";
 import { Inter } from "next/font/google";
 import { redirect } from "next/navigation";
 import AdminNav from "./admin-nav";
+import AdminProviders from "./components/admin-providers";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -14,8 +15,10 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   return (
     <div className={`app-shell min-h-screen ${inter.className}`}>
-      <AdminNav email={session.user?.email ?? ""} signOutAction={signOutAction} />
-      <main className="mx-auto max-w-[min(100%,92rem)] px-5 py-6 md:px-8 md:py-8">{children}</main>
+      <AdminProviders>
+        <AdminNav email={session.user?.email ?? ""} signOutAction={signOutAction} />
+        <main className="mx-auto max-w-[min(100%,92rem)] px-5 py-6 md:px-8 md:py-8">{children}</main>
+      </AdminProviders>
     </div>
   );
 }

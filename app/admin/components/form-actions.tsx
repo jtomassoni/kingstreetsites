@@ -2,7 +2,10 @@
 
 import { crm } from "@/lib/admin-ui";
 
-export function isFormDirty<T extends Record<string, string>>(current: T, baseline: T): boolean {
+export function isFormDirty<T extends Record<string, string | boolean>>(
+  current: T,
+  baseline: T
+): boolean {
   return (Object.keys(baseline) as (keyof T)[]).some((key) => current[key] !== baseline[key]);
 }
 

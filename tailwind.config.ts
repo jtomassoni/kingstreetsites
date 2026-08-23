@@ -6,15 +6,15 @@ const config: Config = {
     extend: {
       colors: {
         crm: {
-          bg: "var(--crm-bg)",
-          surface: "var(--crm-surface)",
-          raised: "var(--crm-raised)",
-          border: "var(--crm-border)",
-          text: "var(--crm-text)",
-          muted: "var(--crm-muted)",
-          faint: "var(--crm-faint)",
-          accent: "var(--crm-accent)",
-          "accent-hover": "var(--crm-accent-hover)",
+          bg: "rgb(var(--crm-bg) / <alpha-value>)",
+          surface: "rgb(var(--crm-surface) / <alpha-value>)",
+          raised: "rgb(var(--crm-raised) / <alpha-value>)",
+          border: "rgb(var(--crm-border) / <alpha-value>)",
+          text: "rgb(var(--crm-text) / <alpha-value>)",
+          muted: "rgb(var(--crm-muted) / <alpha-value>)",
+          faint: "rgb(var(--crm-faint) / <alpha-value>)",
+          accent: "rgb(var(--crm-accent) / <alpha-value>)",
+          "accent-hover": "rgb(var(--crm-accent-hover) / <alpha-value>)",
         },
         ink: {
           DEFAULT: "#0c1222",
@@ -50,7 +50,8 @@ const config: Config = {
         "fade-up": "fade-up 0.7s ease-out forwards",
         "fade-in": "fade-in 0.5s ease-out forwards",
         float: "float 6s ease-in-out infinite",
-        shimmer: "shimmer 2.5s ease-in-out infinite"
+        shimmer: "shimmer 2.5s ease-in-out infinite",
+        "toast-in": "toast-in 180ms ease-out",
       },
       keyframes: {
         "fade-up": {
@@ -68,7 +69,11 @@ const config: Config = {
         shimmer: {
           "0%, 100%": { opacity: "0.4" },
           "50%": { opacity: "0.8" }
-        }
+        },
+        "toast-in": {
+          "0%": { opacity: "0", transform: "translateY(8px) scale(0.98)" },
+          "100%": { opacity: "1", transform: "translateY(0) scale(1)" },
+        },
       },
       backgroundImage: {
         "grid-fade":

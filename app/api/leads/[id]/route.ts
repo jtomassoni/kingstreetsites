@@ -56,14 +56,6 @@ export async function PATCH(
     values.push(clean(body.website_url));
     updates.push(`website_url = $${values.length}`);
   }
-  if ("barter_payments_enabled" in body) {
-    if (typeof body.barter_payments_enabled !== "boolean") {
-      return NextResponse.json({ error: "barter_payments_enabled must be a boolean" }, { status: 400 });
-    }
-    values.push(body.barter_payments_enabled);
-    updates.push(`barter_payments_enabled = $${values.length}`);
-  }
-
   if (!updates.length) {
     return NextResponse.json({ error: "No fields to update" }, { status: 400 });
   }
@@ -73,7 +65,7 @@ export async function PATCH(
     `update leads
      set ${updates.join(", ")}, updated_at = now()
      where id = $${values.length}
-     returning id, contact_email, contact_name, contact_role, contact_email_source, phone, website_url, barter_payments_enabled`,
+     returning id, contact_email, contact_name, contact_role, contact_email_source, phone, website_url`,
     values
   );
 

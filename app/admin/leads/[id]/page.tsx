@@ -1,7 +1,8 @@
 import fs from "fs";
 import ConversationThread from "../components/conversation-thread";
 import LeadSidebar from "../components/lead-sidebar";
-import { getLead, getLeadMessages, getLeadNotes, getLeadTimeline } from "./data";
+import LeadSiteIssuesPanel from "../components/lead-site-issues-panel";
+import { getLead, getLeadMessages, getLeadNotes, getLeadSiteIssues, getLeadTimeline } from "./data";
 import type { ConversationMessage } from "../components/conversation-thread";
 import type { ConversationNote } from "../components/conversation-thread";
 import type { TimelineSystemEvent } from "../components/conversation-thread";
@@ -62,10 +63,11 @@ export default async function LeadOverviewPage({ params }: { params: Promise<{ i
   const lead = await getLead(id);
   if (!lead) return null;
 
-  const [timeline, messages, notes] = await Promise.all([
+  const [timeline, messages, notes, siteIssues] = await Promise.all([
     getLeadTimeline(id),
     getLeadMessages(id),
     getLeadNotes(id),
+    getLeadSiteIssues(id),
   ]);
 
   const hasScreenshot = Boolean(
@@ -82,6 +84,7 @@ export default async function LeadOverviewPage({ params }: { params: Promise<{ i
           initialMessages={messages as ConversationMessage[]}
           initialNotes={notes as ConversationNote[]}
           initialEvents={timeline as TimelineSystemEvent[]}
+          initialSiteIssues={siteIssues}
           discoveredAt={lead.created_at}
           fillHeight
         />
@@ -89,6 +92,7 @@ export default async function LeadOverviewPage({ params }: { params: Promise<{ i
 
       <aside className={crm.workSidebar}>
         <LeadSidebar lead={lead} brief={brief} hasScreenshot={hasScreenshot} />
+        <LeadSiteIssuesPanel leadId={lead.id} initialIssues={siteIssues} />
       </aside>
     </div>
   );

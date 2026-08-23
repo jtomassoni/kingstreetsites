@@ -2,6 +2,7 @@ import { Pool } from "pg";
 import type { PipelineSummary } from "./pipeline-stats-strip";
 import { ensureLeadCrmSchema } from "@/lib/lead-schema";
 import { ensureBillingSchema } from "@/lib/billing";
+import { chainLocationExcludeClause } from "@/lib/chain-brands";
 
 export type PeopleView = "leads" | "customers";
 
@@ -42,6 +43,14 @@ export function leadFilterClause(filters: LeadListFilters = {}): {
       `(business_name ilike $${idx} or coalesce(metro, '') ilike $${idx} or coalesce(zip, '') ilike $${idx} or coalesce(contact_name, '') ilike $${idx} or coalesce(contact_email, '') ilike $${idx} or coalesce(phone, '') ilike $${idx} or coalesce(website_url, '') ilike $${idx} or coalesce(address, '') ilike $${idx})`
     );
     values.push(`%${q.trim()}%`);
+  }
+
+  // Demo-site ICP: tier A/B only (missing/outdated sites). Hide polished + corporate rejects.
+  if (view === "leads") {
+    conditions.push(`(tier is null or tier in ('A', 'B'))`);
+    const chainExclude = chainLocationExcludeClause(values.length + 1);
+    conditions.push(chainExclude.sql);
+    values.push(...chainExclude.values);
   }
 
   const where = conditions.length ? `where ${conditions.join(" and ")}` : "";
@@ -106,13 +115,20 @@ export async function getLeads(filters: LeadListFilters = {}, sort?: string) {
     const { where, values } = leadFilterClause(filters);
 
     const effectiveSort = sort ?? (view === "leads" ? "grade" : "newest");
+    const barBoost = view === "leads"
+      ? `case
+           when place_types && ARRAY['bar']::text[] then 3
+           when business_name ~* '(bar|pub|tavern|saloon|lounge|taproom|brewery|dive|roadhouse)' then 2
+           else 0
+         end desc, `
+      : "";
     const orderBy =
       effectiveSort === "grade"
-        ? "case site_grade when 'F' then 4 when 'C' then 3 when 'B' then 2 when 'A' then 1 else 0 end desc, coalesce(opportunity_score, 0) desc, created_at desc"
+        ? `${barBoost}case site_grade when 'F' then 4 when 'C' then 3 when 'B' then 2 when 'A' then 1 else 0 end desc, coalesce(opportunity_score, 0) desc, created_at desc`
         : effectiveSort === "pending"
           ? "case analysis_status when 'pending' then 2 when 'failed' then 1 else 0 end desc, created_at desc"
           : effectiveSort === "opportunity"
-            ? "coalesce(opportunity_score, 0) desc, case site_grade when 'F' then 4 when 'C' then 3 when 'B' then 2 when 'A' then 1 else 0 end desc, created_at desc"
+            ? `${barBoost}coalesce(opportunity_score, 0) desc, case site_grade when 'F' then 4 when 'C' then 3 when 'B' then 2 when 'A' then 1 else 0 end desc, created_at desc`
             : "created_at desc";
 
     const billingSelect =
@@ -142,7 +158,8 @@ export async function getLeads(filters: LeadListFilters = {}, sort?: string) {
       `select leads.id, business_name, metro, zip, tier, status, analysis_status, analyzed_at,
               site_grade, pitch_angle, looks_modern, mobile_ready, accessibility_ok,
               has_online_ordering, has_reservations, has_real_menu,
-              google_rating, google_review_count, website_url, contact_name, contact_email, phone, created_at
+              google_rating, google_review_count, website_url, contact_name, contact_email, phone,
+              place_types, created_at
               ${billingSelect}
        from leads
        ${billingJoin}

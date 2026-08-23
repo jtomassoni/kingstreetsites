@@ -2,9 +2,9 @@ import Link from "next/link";
 import { dbPool } from "@/lib/db";
 import { ensureBillingSchema, formatMoney, INVOICE_STATUS_LABEL, type InvoiceStatus } from "@/lib/billing";
 import { crm, invoiceStatusTone } from "@/lib/admin-ui";
+import InvoiceTemplatesPanel from "./invoice-templates-panel";
 
 async function getInvoices(status?: string) {
-  await ensureBillingSchema(dbPool);
   const values: string[] = [];
   let where = "";
   if (status) {
@@ -28,7 +28,6 @@ async function getInvoices(status?: string) {
 }
 
 async function getBillingTotals() {
-  await ensureBillingSchema(dbPool);
   const { rows } = await dbPool.query<{
     outstanding_cents: number;
     collected_cents: number;
@@ -62,6 +61,7 @@ export default async function BillingPage({
   searchParams: Promise<{ status?: string }>;
 }) {
   const { status } = await searchParams;
+  await ensureBillingSchema(dbPool);
   const [invoices, totals] = await Promise.all([getInvoices(status), getBillingTotals()]);
 
   return (
@@ -88,6 +88,10 @@ export default async function BillingPage({
           </div>
         </div>
       </header>
+
+      <InvoiceTemplatesPanel />
+
+      <h2 className={`${crm.sectionTitle} mb-3`}>All invoices</h2>
 
       <div className="mb-5 flex flex-wrap gap-2">
         {STATUS_FILTERS.map((f) => (

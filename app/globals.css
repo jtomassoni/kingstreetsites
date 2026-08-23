@@ -17,26 +17,44 @@ body {
 
 /* ── App shell (CRM) ───────────────────────────────────────── */
 .app-shell {
-  --crm-bg: #09090b;
-  --crm-surface: #121214;
-  --crm-raised: #1a1a1e;
-  --crm-border: #27272a;
-  --crm-text: #ececee;
-  --crm-muted: #a0a0ab;
-  --crm-faint: #6b6b76;
-  --crm-accent: #a1a1aa;
-  --crm-accent-hover: #d4d4d8;
+  --crm-bg: 18 23 31;
+  --crm-surface: 26 33 44;
+  --crm-raised: 35 43 56;
+  --crm-border: 51 64 85;
+  --crm-text: 238 241 246;
+  --crm-muted: 154 163 178;
+  --crm-faint: 109 118 136;
+  --crm-accent: 45 212 191;
+  --crm-accent-hover: 94 234 212;
 
-  background: var(--crm-bg);
-  color: var(--crm-text);
+  background-color: rgb(var(--crm-bg));
+  background-image:
+    radial-gradient(ellipse 90% 55% at 15% -10%, rgba(13, 148, 136, 0.14), transparent 55%),
+    radial-gradient(ellipse 70% 45% at 95% 0%, rgba(45, 212, 191, 0.07), transparent 50%),
+    linear-gradient(180deg, #161c27 0%, rgb(var(--crm-bg)) 42%, #0f131a 100%);
+  background-attachment: fixed;
+  color: rgb(var(--crm-text));
+  color-scheme: dark;
   font-feature-settings: "cv02", "cv03", "cv04", "cv11";
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
-.app-shell .lead-status-select option {
-  background-color: var(--crm-raised);
-  color: var(--crm-text);
+.app-shell select option {
+  background-color: rgb(var(--crm-raised));
+  color: rgb(var(--crm-text));
+}
+
+.app-shell input:-webkit-autofill,
+.app-shell input:-webkit-autofill:hover,
+.app-shell input:-webkit-autofill:focus,
+.app-shell textarea:-webkit-autofill,
+.app-shell textarea:-webkit-autofill:hover,
+.app-shell textarea:-webkit-autofill:focus {
+  -webkit-text-fill-color: rgb(var(--crm-text));
+  caret-color: rgb(var(--crm-text));
+  box-shadow: 0 0 0 1000px rgb(var(--crm-raised)) inset;
+  transition: background-color 99999s ease-out 0s;
 }
 
 @keyframes pipeline-indeterminate {

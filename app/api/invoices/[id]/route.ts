@@ -9,6 +9,7 @@ import {
   type InvoiceStatus,
 } from "@/lib/billing";
 import { ensureOutreachSchema } from "@/lib/outreach-schema";
+import { getInvoiceActivity } from "@/lib/invoice-activity";
 
 export async function GET(
   _req: NextRequest,
@@ -27,7 +28,7 @@ export async function GET(
   if (!invoiceRows[0]) return NextResponse.json({ error: "Invoice not found" }, { status: 404 });
 
   const { rows: payments } = await dbPool.query(
-    `select id, invoice_id, amount_cents, method, paid_at, notes, created_at
+    `select id, invoice_id, amount_cents, method, paid_at, notes, receipts, created_at
      from invoice_payments
      where invoice_id = $1
      order by paid_at asc, created_at asc`,
@@ -36,10 +37,13 @@ export async function GET(
 
   const paid_cents = payments.reduce((sum, p) => sum + Number(p.amount_cents), 0);
 
+  const activity = await getInvoiceActivity(dbPool, id, invoiceRows[0].lead_id);
+
   return NextResponse.json({
     invoice: invoiceRows[0],
     payments,
     paid_cents,
+    activity,
   });
 }
 
@@ -55,12 +59,21 @@ export async function PATCH(
   await ensureBillingSchema(dbPool);
   await ensureOutreachSchema(dbPool);
 
+  const existingRes = await dbPool.query(
+    `select lead_id, invoice_number, status from invoices where id = $1`,
+    [id]
+  );
+  const existing = existingRes.rows[0];
+  if (!existing) return NextResponse.json({ error: "Invoice not found" }, { status: 404 });
+
   const updates: string[] = [];
   const values: unknown[] = [];
+  const changedFields: string[] = [];
 
   if ("title" in body && typeof body.title === "string" && body.title.trim()) {
     values.push(body.title.trim());
     updates.push(`title = $${values.length}`);
+    changedFields.push("title");
   }
   if ("amount" in body) {
     const amountDollars = Number(body.amount);
@@ -69,6 +82,7 @@ export async function PATCH(
     }
     values.push(dollarsToCents(amountDollars));
     updates.push(`amount_cents = $${values.length}`);
+    changedFields.push("amount");
   }
   if ("status" in body) {
     const status = body.status as string;
@@ -77,6 +91,7 @@ export async function PATCH(
     }
     values.push(status);
     updates.push(`status = $${values.length}`);
+    changedFields.push("status");
     if (status === "paid") {
       updates.push(`paid_at = coalesce(paid_at, now())`);
     } else {
@@ -86,10 +101,12 @@ export async function PATCH(
   if ("due_date" in body) {
     values.push(body.due_date || null);
     updates.push(`due_date = $${values.length}`);
+    changedFields.push("due date");
   }
   if ("notes" in body) {
     values.push(typeof body.notes === "string" && body.notes.trim() ? body.notes.trim() : null);
     updates.push(`notes = $${values.length}`);
+    changedFields.push("notes");
   }
 
   if (!updates.length) {
@@ -113,17 +130,24 @@ export async function PATCH(
     if (refreshed.rows[0]) rows[0] = refreshed.rows[0];
   }
 
-  if (body.status) {
+  if (changedFields.length > 0) {
+    const by = session.user?.email ?? "unknown";
+    const bodyText =
+      "status" in body && changedFields.includes("status")
+        ? `${rows[0].invoice_number} → ${body.status}`
+        : `${rows[0].invoice_number} · ${changedFields.join(", ")} updated`;
+
     await dbPool.query(
       `insert into lead_timeline_events (lead_id, event_type, title, body, metadata)
        values ($1, 'invoice_updated', 'Invoice updated', $2, $3::jsonb)`,
       [
         rows[0].lead_id,
-        `${rows[0].invoice_number} → ${body.status}`,
+        bodyText,
         JSON.stringify({
           invoiceId: id,
-          status: body.status,
-          by: session.user?.email ?? "unknown",
+          status: body.status ?? rows[0].status,
+          changedFields,
+          by,
         }),
       ]
     );

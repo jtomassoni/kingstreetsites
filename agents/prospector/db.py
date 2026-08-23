@@ -120,6 +120,7 @@ def update_lead_scored(conn, lead_id: str, payload: dict):
                     else contact_email_source
                 end,
                 contact_enrichment = coalesce(%(contact_enrichment)s::jsonb, contact_enrichment),
+                website_url = coalesce(nullif(%(website_url)s, ''), website_url),
                 analyzed_at = case when %(analysis_status)s = 'complete' then now() else analyzed_at end,
                 updated_at = now()
             where id = %(lead_id)s
@@ -148,6 +149,7 @@ def update_lead_scored(conn, lead_id: str, payload: dict):
                 "contact_enrichment": json.dumps(payload.get("contact_enrichment"))
                 if payload.get("contact_enrichment") is not None
                 else None,
+                "website_url": payload.get("website_url"),
             },
         )
 

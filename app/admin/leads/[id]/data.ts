@@ -1,6 +1,7 @@
 import { ensureLeadCrmSchema } from "@/lib/lead-schema";
 import { ensureOutreachSchema } from "@/lib/outreach-schema";
-import { ensureBillingSchema } from "@/lib/billing";
+import { ensureBillingSchema, generateDueScheduledInvoices } from "@/lib/billing";
+import { ensureLeadSiteIssuesSchema } from "@/lib/lead-site-issues";
 import { dbPool } from "@/lib/db";
 
 export async function getLead(id: string) {
@@ -67,13 +68,33 @@ export async function getLeadTimeline(id: string) {
   }
 }
 
+export async function getLeadSiteIssues(id: string) {
+  await ensureLeadSiteIssuesSchema(dbPool);
+  try {
+    const { rows } = await dbPool.query(
+      `select id, lead_id, image_url, description, sort_order, created_at
+       from lead_site_issues
+       where lead_id = $1
+       order by sort_order asc, created_at asc`,
+      [id]
+    );
+    return rows;
+  } catch {
+    return [];
+  }
+}
+
 export async function getLeadInvoices(id: string) {
   await ensureBillingSchema(dbPool);
   try {
+    await generateDueScheduledInvoices(dbPool, { leadId: id });
     const { rows } = await dbPool.query(
       `select i.*,
+              s.frequency as schedule_frequency,
+              s.active as schedule_active,
               coalesce((select sum(p.amount_cents) from invoice_payments p where p.invoice_id = i.id), 0)::int as paid_cents
        from invoices i
+       left join invoice_schedules s on s.id = i.schedule_id
        where i.lead_id = $1
        order by i.created_at desc`,
       [id]

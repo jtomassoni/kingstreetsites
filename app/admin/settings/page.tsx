@@ -35,13 +35,6 @@ async function toggleSetting(key: string, value: boolean) {
 
 const TOGGLES = [
   {
-    key: "external_comms",
-    label: "External email",
-    description:
-      "When OFF, nothing leaves the CRM. Turn ON only when you are ready to send real outreach from conversations.",
-    dangerLabel: "Enables outbound email to real prospects",
-  },
-  {
     key: "auto_send",
     label: "Auto-send",
     description:
@@ -58,7 +51,7 @@ export default async function SettingsPage() {
       <header className="mb-8">
         <h1 className={crm.pageTitle}>Settings</h1>
         <p className={crm.pageLead}>
-          Safety switches for outbound email. Day-to-day work lives in the lead pool and customers.
+          Manual sends from conversations always go out. Auto-send stays off unless you want queued agent emails to skip review.
         </p>
       </header>
 

@@ -23,7 +23,16 @@ if env_path.exists():
             k, _, v = line.partition("=")
             os.environ.setdefault(k.strip(), v.strip())
 
-from places import search_restaurants, get_place_details, is_chain, get_zips_for_metro
+from places import (
+    search_bars_and_restaurants,
+    get_place_details,
+    is_chain,
+    is_convenience_store,
+    is_fast_food,
+    get_zips_for_metro,
+)
+from target_profile import is_upscale_skip
+from website_discovery import resolve_website_url
 from db import get_conn, upsert_scrape_lead, log_audit
 
 
@@ -103,7 +112,7 @@ def run(zip_code: str, metro: str, run_id: str = ""):
                     run_id,
                     current_business=f"Google Places: ZIP {target_zip} ({zi + 1}/{len(target_zips)})…",
                 )
-            zip_places = search_restaurants(target_zip, api_key)
+            zip_places = search_bars_and_restaurants(target_zip, api_key)
             for place in zip_places:
                 pid = place.get("place_id")
                 if not pid or pid in seen_place_ids:
@@ -115,12 +124,22 @@ def run(zip_code: str, metro: str, run_id: str = ""):
         print(f"[prospector] Found {total_raw} raw results")
 
         candidates = []
+        skipped = 0
         for i, place in enumerate(raw_places):
             name = place.get("name", "")
+            types = place.get("types") or []
             if is_chain(name):
+                skipped += 1
                 print(f"  [{i+1}/{total_raw}] SKIP (chain): {name}")
                 continue
+            if is_convenience_store(name, types):
+                skipped += 1
+                print(f"  [{i+1}/{total_raw}] SKIP (convenience store): {name}")
+                continue
             candidates.append((i, place))
+
+        if skipped:
+            print(f"[prospector] Skipped {skipped} chain/corporate/convenience location(s)")
 
         total = len(candidates)
         if run_id:
@@ -154,7 +173,23 @@ def run(zip_code: str, metro: str, run_id: str = ""):
                 if details.get("business_status") != "OPERATIONAL":
                     return False, None, f"[{index+1}/{total_raw}] {name}: not operational"
                 types = details.get("types") or []
+                if is_chain(name):
+                    return False, None, f"[{index+1}/{total_raw}] {name}: SKIP (chain)"
+                if is_fast_food(types):
+                    return False, None, f"[{index+1}/{total_raw}] {name}: SKIP (fast food)"
+                if is_convenience_store(name, types):
+                    return False, None, f"[{index+1}/{total_raw}] {name}: SKIP (convenience store)"
+                price_level = details.get("price_level")
+                if is_upscale_skip(name, types, price_level):
+                    return False, None, f"[{index+1}/{total_raw}] {name}: SKIP (upscale)"
                 cuisine = _cuisine_from_types(types)
+                places_website = details.get("website")
+                website_url, website_source = resolve_website_url(
+                    name,
+                    places_website,
+                    metro=metro,
+                    address=details.get("formatted_address"),
+                )
                 lead = {
                     "metro": metro,
                     "zip": _extract_zip(details.get("formatted_address")) or zip_code,
@@ -162,13 +197,16 @@ def run(zip_code: str, metro: str, run_id: str = ""):
                     "business_name": name,
                     "address": details.get("formatted_address"),
                     "phone": details.get("formatted_phone_number"),
-                    "website_url": details.get("website"),
+                    "website_url": website_url,
                     "cuisine": cuisine,
                     "google_review_count": details.get("user_ratings_total"),
                     "google_rating": details.get("rating"),
                     "place_types": types,
                 }
-                return True, lead, f"[{index+1}/{total_raw}] {name}: saved"
+                msg = f"[{index+1}/{total_raw}] {name}: saved"
+                if website_source == "search" and website_url:
+                    msg += f" (website via search: {website_url})"
+                return True, lead, msg
             except Exception as e:
                 return False, None, f"[{index+1}/{total_raw}] {name}: error {e}"
 

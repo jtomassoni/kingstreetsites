@@ -20,7 +20,7 @@ export default function AdminNav({
   const settingsActive = pathname.startsWith("/admin/settings");
 
   return (
-    <header className="sticky top-0 z-20 border-b border-crm-border bg-crm-bg/95 backdrop-blur-sm">
+    <header className="sticky top-0 z-20 border-b border-crm-border/50 bg-[#12171f]/75 backdrop-blur-md">
       <div className="mx-auto flex h-12 max-w-[min(100%,92rem)] items-end justify-between gap-6 px-5 md:px-8">
         <div className="flex min-w-0 items-end gap-8">
           <Link href="/admin/leads" className="pb-3 text-sm font-semibold text-crm-text">

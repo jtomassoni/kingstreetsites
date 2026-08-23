@@ -3,7 +3,16 @@ import { auth } from "@/auth";
 import { dbPool } from "@/lib/db";
 import { ensureOutreachSchema } from "@/lib/outreach-schema";
 import { ensureLeadCrmSchema } from "@/lib/lead-schema";
-import { Resend } from "resend";
+import {
+  buildLeadInboundReplyTo,
+  isValidEmail,
+  sendOutreachEmail,
+} from "@/lib/outreach-email";
+import {
+  buildSiteIssuesHtml,
+  buildSiteIssuesPlainText,
+  ensureLeadSiteIssuesSchema,
+} from "@/lib/lead-site-issues";
 
 export async function POST(
   req: NextRequest,
@@ -17,13 +26,21 @@ export async function POST(
   const to = (body?.to as string | undefined)?.trim();
   let subject = (body?.subject as string | undefined)?.trim();
   const message = (body?.message as string | undefined)?.trim();
+  const siteIssueIds = Array.isArray(body?.siteIssueIds)
+    ? (body.siteIssueIds as unknown[]).filter((id): id is string => typeof id === "string")
+    : [];
 
   if (!to || !message) {
     return NextResponse.json({ error: "to and message are required" }, { status: 400 });
   }
 
+  if (!isValidEmail(to)) {
+    return NextResponse.json({ error: "Recipient email is invalid" }, { status: 400 });
+  }
+
   await ensureOutreachSchema(dbPool);
   await ensureLeadCrmSchema(dbPool);
+  await ensureLeadSiteIssuesSchema(dbPool);
 
   if (!subject) {
     const last = await dbPool.query<{ subject: string | null }>(
@@ -46,25 +63,40 @@ export async function POST(
     );
   }
 
-  if (!process.env.RESEND_API_KEY) {
-    return NextResponse.json({ error: "Missing RESEND_API_KEY" }, { status: 500 });
+  let selectedIssues: { image_url: string; description: string }[] = [];
+  if (siteIssueIds.length > 0) {
+    const { rows } = await dbPool.query<{ id: string; image_url: string; description: string }>(
+      `select id, image_url, description
+       from lead_site_issues
+       where lead_id = $1 and id = any($2::uuid[])
+       order by sort_order asc, created_at asc`,
+      [id, siteIssueIds]
+    );
+    selectedIssues = rows;
   }
 
-  const resend = new Resend(process.env.RESEND_API_KEY);
-  const fromEmail =
-    process.env.OUTREACH_FROM_EMAIL ??
-    process.env.AUTH_FROM_EMAIL ??
-    "onboarding@resend.dev";
+  const fullMessage =
+    selectedIssues.length > 0 ? `${message}${buildSiteIssuesPlainText(selectedIssues)}` : message;
+  const extraBodyHtml = buildSiteIssuesHtml(selectedIssues);
 
-  const { data, error } = await resend.emails.send({
-    from: fromEmail,
-    to,
-    subject,
-    text: message,
-  });
-
-  if (error) {
-    return NextResponse.json({ error: error.message ?? "Failed to send email" }, { status: 502 });
+  let sent: { id: string | null; fromEmail: string; from: string };
+  let inboundReplyTo: string;
+  try {
+    inboundReplyTo = buildLeadInboundReplyTo(id);
+    sent = await sendOutreachEmail({
+      to,
+      subject,
+      message: fullMessage,
+      replyTo: inboundReplyTo,
+      extraBodyHtml,
+    });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Failed to send email";
+    const status =
+      msg.includes("not verified") || msg.includes("not added") || msg.includes("resend.dev")
+        ? 422
+        : 502;
+    return NextResponse.json({ error: msg }, { status });
   }
 
   await dbPool.query(
@@ -72,7 +104,7 @@ export async function POST(
       (lead_id, direction, channel, from_email, to_email, subject, body_text, provider, provider_message_id)
      values
       ($1, 'outbound', 'email', $2, $3, $4, $5, 'resend', $6)`,
-    [id, fromEmail, to, subject, message, data?.id ?? null]
+    [id, sent.fromEmail, to, subject, fullMessage, sent.id]
   );
 
   await dbPool.query(
@@ -83,8 +115,9 @@ export async function POST(
       subject,
       JSON.stringify({
         to,
-        from: fromEmail,
-        providerMessageId: data?.id ?? null,
+        from: sent.from,
+        replyTo: inboundReplyTo,
+        providerMessageId: sent.id,
         by: session.user?.email ?? "unknown",
       }),
     ]
@@ -99,5 +132,5 @@ export async function POST(
     [id, to]
   );
 
-  return NextResponse.json({ ok: true, messageId: data?.id ?? null });
+  return NextResponse.json({ ok: true, messageId: sent.id });
 }
