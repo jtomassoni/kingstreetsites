@@ -364,7 +364,11 @@ export default function ProspectorButton({ pipeline }: { pipeline: PipelineSumma
                 </p>
                 <h3 className="mt-0.5 text-base font-bold text-crm-text sm:mt-1 sm:text-lg">Run failed</h3>
                 <p className="mt-1 line-clamp-3 break-words text-xs text-red-200/90 sm:mt-2 sm:text-sm">{run.error ?? "Unknown error"}</p>
-                <p className="mt-1 text-[10px] text-crm-faint sm:mt-2 sm:text-xs">See agents/prospector/worker.log for full output.</p>
+                <p className="mt-1 text-[10px] text-crm-faint sm:mt-2 sm:text-xs">
+                  {process.env.NODE_ENV === "development"
+                    ? "See agents/prospector/worker.log for full output."
+                    : "Check GitHub Actions → Agent — Prospector for logs."}
+                </p>
               </div>
             </div>
             <button

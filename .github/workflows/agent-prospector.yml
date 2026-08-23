@@ -1,0 +1,35 @@
+name: Agent — Prospector
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: prospector_runs.id
+        required: true
+      zip:
+        description: ZIP code or ALL
+        required: true
+      metro:
+        description: Metro name
+        required: true
+        default: Denver
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Python deps
+        run: pip install -r agents/requirements-prospector.txt
+
+      - name: Run prospector
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          GOOGLE_PLACES_API_KEY: ${{ secrets.GOOGLE_PLACES_API_KEY }}
+        run: python3 agents/prospector/main.py "${{ inputs.zip }}" "${{ inputs.metro }}" "${{ inputs.run_id }}"

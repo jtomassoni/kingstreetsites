@@ -1,9 +1,7 @@
 import { auth } from "@/auth";
 import { NextRequest, NextResponse } from "next/server";
-import { spawn } from "child_process";
+import { dispatchAnalyzerRun } from "@/lib/agent-dispatch";
 import { getDbPool } from "@/lib/db";
-import fs from "fs";
-import path from "path";
 import { ensureOutreachSchema } from "@/lib/outreach-schema";
 
 export async function POST(
@@ -41,7 +39,6 @@ export async function POST(
     );
   }
 
-  // Ensure a failed lead is eligible for the pending queue as well as lead_id targeting.
   if (lead.analysis_status === "failed") {
     await pool.query(
       `update leads
@@ -71,58 +68,24 @@ export async function POST(
     ]
   );
 
-  const scriptPath = path.join(process.cwd(), "agents/analyzer/main.py");
-  const logPath = path.join(process.cwd(), "agents/analyzer/worker.log");
-  let logFd: number | null = null;
-  try {
-    fs.mkdirSync(path.dirname(logPath), { recursive: true });
-    logFd = fs.openSync(logPath, "a");
-    fs.writeSync(
-      logFd,
-      `\n--- ${new Date().toISOString()} analyzer runId=${runId} leadId=${id} limit=1\n`
-    );
-  } catch {
-    logFd = null;
-  }
-
-  const child = spawn("python3", [scriptPath, runId, "1"], {
-    detached: true,
-    stdio: logFd !== null ? (["ignore", logFd, logFd] as const) : "ignore",
-    env: {
-      ...process.env,
-      ANALYZER_LIMIT: "1",
-      ANALYZER_LEAD_ID: id,
-      ANALYZER_MAX_WORKERS: "1",
+  const started = await dispatchAnalyzerRun({
+    runId,
+    limit: "1",
+    leadId: id,
+    onSpawnError: async (message) => {
+      await getDbPool().query(
+        `update analyzer_runs set status = 'failed', error = $1, finished_at = now() where id = $2`,
+        [message, runId]
+      );
     },
   });
 
-  child.on("error", async (err) => {
-    if (logFd !== null) {
-      try {
-        fs.writeSync(logFd, `spawn error: ${err instanceof Error ? err.message : String(err)}\n`);
-      } catch {
-        /* ignore */
-      }
-      try {
-        fs.closeSync(logFd);
-      } catch {
-        /* ignore */
-      }
-      logFd = null;
-    }
-    await getDbPool().query(
+  if (!started.ok) {
+    await pool.query(
       `update analyzer_runs set status = 'failed', error = $1, finished_at = now() where id = $2`,
-      [`Could not start analyzer worker: ${err instanceof Error ? err.message : String(err)}`, runId]
+      [started.error, runId]
     );
-  });
-
-  child.unref();
-  if (logFd !== null) {
-    try {
-      fs.closeSync(logFd);
-    } catch {
-      /* ignore */
-    }
+    return NextResponse.json({ error: started.error }, { status: 503 });
   }
 
   return NextResponse.json({ ok: true, runId, leadId: id });
