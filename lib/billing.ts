@@ -300,6 +300,24 @@ export function dollarsToCents(dollars: number): number {
   return Math.round(dollars * 100);
 }
 
+/**
+ * Format a Postgres `date` / YYYY-MM-DD string for display.
+ * Avoids `new Date("YYYY-MM-DD")` which is UTC midnight and shifts a day in US timezones.
+ */
+export function formatDateOnly(
+  value: string | null | undefined,
+  opts: Intl.DateTimeFormatOptions = { month: "numeric", day: "numeric", year: "numeric" }
+): string {
+  if (!value) return "";
+  const iso = value.slice(0, 10);
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+  if (!match) return iso;
+  const y = Number(match[1]);
+  const m = Number(match[2]);
+  const d = Number(match[3]);
+  return new Date(y, m - 1, d).toLocaleDateString(undefined, opts);
+}
+
 export function formatMoney(cents: number, currency = "usd"): string {
   return new Intl.NumberFormat("en-US", {
     style: "currency",

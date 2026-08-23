@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { dbPool } from "@/lib/db";
-import { ensureBillingSchema, formatMoney, INVOICE_STATUS_LABEL, type InvoiceStatus } from "@/lib/billing";
+import { ensureBillingSchema, formatMoney, formatDateOnly, INVOICE_STATUS_LABEL, type InvoiceStatus } from "@/lib/billing";
 import { crm, invoiceStatusTone } from "@/lib/admin-ui";
 import InvoiceTemplatesPanel from "./invoice-templates-panel";
 
@@ -153,7 +153,7 @@ export default async function BillingPage({
                   {INVOICE_STATUS_LABEL[inv.status]}
                 </span>
                 <span className="text-xs text-crm-faint">
-                  {inv.due_date ? new Date(inv.due_date).toLocaleDateString() : "—"}
+                  {inv.due_date ? formatDateOnly(inv.due_date) : "—"}
                 </span>
               </div>
             </Link>

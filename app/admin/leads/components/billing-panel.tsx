@@ -11,6 +11,7 @@ import {
   RECURRING_FREQUENCY_LABEL,
   centsToDollars,
   formatMoney,
+  formatDateOnly,
   type InvoiceStatus,
   type PaymentMethod,
   type RecurringFrequency,
@@ -1081,7 +1082,7 @@ export default function BillingPanel({
                             {formatMoney(inv.amount_cents, inv.currency)}
                             {paid > 0 ? ` · paid ${formatMoney(paid)}` : ""}
                             {remaining > 0 && inv.status !== "void" ? ` · due ${formatMoney(remaining)}` : ""}
-                            {inv.due_date ? ` · due ${new Date(inv.due_date).toLocaleDateString()}` : ""}
+                            {inv.due_date ? ` · due ${formatDateOnly(inv.due_date)}` : ""}
                           </p>
                         </div>
                         <span className={crm.badge(invoiceStatusTone(inv.status))}>

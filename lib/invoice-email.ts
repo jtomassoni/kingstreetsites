@@ -4,7 +4,7 @@ import {
   isValidEmail,
   sendOutreachEmail,
 } from "@/lib/outreach-email";
-import { formatMoney, type InvoiceStatus } from "@/lib/billing";
+import { formatMoney, formatDateOnly, type InvoiceStatus } from "@/lib/billing";
 
 type InvoiceRow = {
   id: string;
@@ -26,7 +26,7 @@ type LeadRow = {
 
 function formatDueDate(iso: string | null): string | null {
   if (!iso) return null;
-  return new Date(iso).toLocaleDateString("en-US", {
+  return formatDateOnly(iso, {
     month: "long",
     day: "numeric",
     year: "numeric",
