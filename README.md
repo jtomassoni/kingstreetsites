@@ -37,20 +37,24 @@ Monaghan's is included in the portfolio as an existing reference project but doe
 Create a `.env.local` file with:
 
 ```bash
+AUTH_SECRET=generate-a-long-random-string
+AUTH_URL=http://localhost:3000
+NEXT_PUBLIC_SITE_URL=http://localhost:3000
+ADMIN_EMAIL=you@example.com
+ADMIN_PASSWORD=choose-a-strong-password
+DATABASE_URL=postgresql://...
 RESEND_API_KEY=your_resend_api_key
 CONTACT_TO_EMAIL=owner@yourdomain.com
 CONTACT_FROM_EMAIL=notifications@yourdomain.com
 AUTO_REPLY_FROM_EMAIL=hello@yourdomain.com
-ADMIN_USER_JSON={"username":"admin","password":"change-this-password"}
-NEXT_PUBLIC_SITE_URL=http://localhost:3000
-DATABASE_URL=
 ```
 
+- `AUTH_SECRET` required for session signing (e.g. `openssl rand -base64 32`).
+- `ADMIN_EMAIL` / `ADMIN_PASSWORD` required for admin dashboard login.
 - `RESEND_API_KEY` required for outbound email.
 - `CONTACT_TO_EMAIL` required recipient for inbound lead notifications.
 - `CONTACT_FROM_EMAIL` required sender address for notifications.
 - `AUTO_REPLY_FROM_EMAIL` optional sender for prospect auto-replies.
-- `ADMIN_USER_JSON` required env-based admin credentials object for lightweight internal auth.
 - `NEXT_PUBLIC_SITE_URL` used for admin logout redirect handling.
 - `DATABASE_URL` optional for future Neon integration.
 

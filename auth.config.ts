@@ -5,7 +5,6 @@ export default {
   providers: [],
   pages: {
     signIn: "/login",
-    verifyRequest: "/login?verify=1",
   },
   trustHost: true,
 } satisfies NextAuthConfig;

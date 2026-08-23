@@ -1,64 +1,48 @@
 "use client";
 
 import Link from "next/link";
-import { useState, Suspense } from "react";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
 import { signIn } from "next-auth/react";
-import { useSearchParams } from "next/navigation";
-import { devSignIn } from "./actions";
 
-function LoginForm() {
-  const params = useSearchParams();
-  const verify = params.get("verify");
+export default function LoginPage() {
+  const router = useRouter();
   const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
-  const [sent, setSent] = useState(!!verify);
+  const [error, setError] = useState<string | null>(null);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
-    await signIn("resend", { email, redirect: false, redirectTo: "/admin/leads" });
-    setSent(true);
-    setLoading(false);
+    setError(null);
+    try {
+      const result = await signIn("credentials", {
+        email: email.trim(),
+        password,
+        redirect: false,
+        redirectTo: "/admin/leads",
+      });
+      if (result?.error) {
+        setError(
+          result.error === "Configuration"
+            ? "Admin login is not configured (set ADMIN_EMAIL and ADMIN_PASSWORD)."
+            : "Invalid email or password."
+        );
+        return;
+      }
+      if (result?.ok) {
+        router.push("/admin/leads");
+        router.refresh();
+        return;
+      }
+      setError("Could not sign in. Try again.");
+    } catch {
+      setError("Network error — could not reach the server.");
+    } finally {
+      setLoading(false);
+    }
   }
-
-  return (
-    <>
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div>
-          <label htmlFor="email" className="block text-sm font-medium text-ink-muted mb-1.5">
-            Email
-          </label>
-          <input
-            id="email"
-            type="email"
-            required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="you@example.com"
-            disabled={sent}
-            className="w-full rounded-xl border border-ink/10 bg-cream px-4 py-3 text-ink placeholder:text-ink-faint focus:outline-none focus:ring-2 focus:ring-brand/40 focus:border-brand/30 disabled:opacity-50"
-          />
-        </div>
-        <button
-          type="submit"
-          disabled={loading || sent}
-          className="w-full rounded-full bg-ink hover:bg-ink/90 disabled:opacity-50 transition-colors py-3 font-semibold text-cream"
-        >
-          {loading ? "Sending…" : "Send sign-in link"}
-        </button>
-      </form>
-
-      {sent && (
-        <div className="mt-4 rounded-xl border border-brand/20 bg-brand/5 px-4 py-3 text-sm text-brand-dark text-center">
-          Check your email — a sign-in link is on its way.
-        </div>
-      )}
-    </>
-  );
-}
-
-export default function LoginPage() {
-  const isDev = process.env.NODE_ENV === "development";
 
   return (
     <main className="min-h-screen bg-cream flex flex-col">
@@ -77,20 +61,51 @@ export default function LoginPage() {
           <p className="mt-2 text-sm text-ink-muted text-center">Team dashboard access</p>
 
           <div className="mt-8 rounded-2xl border border-ink/[0.06] bg-white p-6 shadow-card">
-            {isDev && (
-              <form action={devSignIn}>
-                <button
-                  type="submit"
-                  className="w-full rounded-full border border-ink/10 bg-cream-dark hover:bg-cream transition-colors py-2.5 font-medium text-ink-muted mb-4 text-sm"
-                >
-                  Dev: sign in instantly
-                </button>
-              </form>
-            )}
-
-            <Suspense>
-              <LoginForm />
-            </Suspense>
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div>
+                <label htmlFor="email" className="block text-sm font-medium text-ink-muted mb-1.5">
+                  Email
+                </label>
+                <input
+                  id="email"
+                  type="email"
+                  required
+                  autoComplete="username"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="you@example.com"
+                  disabled={loading}
+                  className="w-full rounded-xl border border-ink/10 bg-cream px-4 py-3 text-ink placeholder:text-ink-faint focus:outline-none focus:ring-2 focus:ring-brand/40 focus:border-brand/30 disabled:opacity-50"
+                />
+              </div>
+              <div>
+                <label htmlFor="password" className="block text-sm font-medium text-ink-muted mb-1.5">
+                  Password
+                </label>
+                <input
+                  id="password"
+                  type="password"
+                  required
+                  autoComplete="current-password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  disabled={loading}
+                  className="w-full rounded-xl border border-ink/10 bg-cream px-4 py-3 text-ink placeholder:text-ink-faint focus:outline-none focus:ring-2 focus:ring-brand/40 focus:border-brand/30 disabled:opacity-50"
+                />
+              </div>
+              {error ? (
+                <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+                  {error}
+                </div>
+              ) : null}
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full rounded-full bg-ink hover:bg-ink/90 disabled:opacity-50 transition-colors py-3 font-semibold text-cream"
+              >
+                {loading ? "Signing in…" : "Sign in"}
+              </button>
+            </form>
           </div>
 
           <p className="mt-6 text-center text-sm text-ink-faint">

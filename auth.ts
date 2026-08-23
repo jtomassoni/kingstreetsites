@@ -1,13 +1,28 @@
 import NextAuth from "next-auth";
 import PostgresAdapter from "@auth/pg-adapter";
-import ResendProvider from "next-auth/providers/resend";
 import Credentials from "next-auth/providers/credentials";
 import FacebookProvider from "next-auth/providers/facebook";
+import { timingSafeEqual } from "crypto";
 import { Pool } from "pg";
 import authConfig from "./auth.config";
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 const hasMetaOAuth = Boolean(process.env.AUTH_FACEBOOK_ID && process.env.AUTH_FACEBOOK_SECRET);
+
+function adminEmail(): string | null {
+  const email = (process.env.ADMIN_EMAIL ?? process.env.CONTACT_TO_EMAIL ?? "").trim().toLowerCase();
+  return email || null;
+}
+
+function adminPassword(): string | null {
+  const password = process.env.ADMIN_PASSWORD ?? "";
+  return password || null;
+}
+
+function safeEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  return timingSafeEqual(Buffer.from(a), Buffer.from(b));
+}
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   ...authConfig,
@@ -15,34 +30,30 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   session: { strategy: "jwt" },
   trustHost: true,
   providers: [
-    ...(process.env.NODE_ENV === "development"
-      ? [
-          Credentials({
-            id: "dev",
-            name: "Dev shortcut",
-            credentials: {},
-            async authorize() {
-              const email = process.env.CONTACT_TO_EMAIL ?? "jtomassoni@gmail.com";
-              return { id: "dev", name: "JT", email };
-            },
-          }),
-        ]
-      : []),
-    ResendProvider({
-      from: process.env.AUTH_FROM_EMAIL ?? "onboarding@resend.dev",
-      sendVerificationRequest: async ({ identifier, url, provider }) => {
-        const { Resend } = await import("resend");
-        const client = new Resend(process.env.RESEND_API_KEY);
-        await client.emails.send({
-          from: provider.from as string,
-          to: identifier,
-          subject: "Sign in to King Street Sites",
-          html: `
-            <p>Click the link below to sign in. This link expires in 24 hours.</p>
-            <p><a href="${url}" style="background:#0d9488;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;display:inline-block">Sign in to King Street Sites</a></p>
-            <p style="color:#94a3b8;font-size:12px">Or copy this URL: ${url}</p>
-          `,
-        });
+    Credentials({
+      name: "Admin",
+      credentials: {
+        email: { label: "Email", type: "email" },
+        password: { label: "Password", type: "password" },
+      },
+      async authorize(credentials) {
+        const expectedEmail = adminEmail();
+        const expectedPassword = adminPassword();
+        if (!expectedEmail || !expectedPassword) {
+          return null;
+        }
+
+        const email = (credentials?.email as string | undefined)?.trim().toLowerCase();
+        const password = credentials?.password as string | undefined;
+        if (!email || !password) return null;
+        if (email !== expectedEmail) return null;
+        if (!safeEqual(password, expectedPassword)) return null;
+
+        return {
+          id: "admin",
+          name: "Admin",
+          email: expectedEmail,
+        };
       },
     }),
     ...(hasMetaOAuth
