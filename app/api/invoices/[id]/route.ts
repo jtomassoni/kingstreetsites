@@ -22,7 +22,7 @@ export async function GET(
   await ensureBillingSchema(dbPool);
 
   const { rows: invoiceRows } = await dbPool.query(
-    `select * from invoices where id = $1`,
+    `select i.*, i.due_date::text as due_date from invoices i where i.id = $1`,
     [id]
   );
   if (!invoiceRows[0]) return NextResponse.json({ error: "Invoice not found" }, { status: 404 });

@@ -1,6 +1,6 @@
 import { ensureLeadCrmSchema } from "@/lib/lead-schema";
 import { ensureOutreachSchema } from "@/lib/outreach-schema";
-import { ensureBillingSchema, generateDueScheduledInvoices } from "@/lib/billing";
+import { ensureBillingSchema, generateDueScheduledInvoices, serializeForClient, toDateOnlyString } from "@/lib/billing";
 import { ensureLeadSiteIssuesSchema } from "@/lib/lead-site-issues";
 import { dbPool } from "@/lib/db";
 
@@ -89,7 +89,17 @@ export async function getLeadInvoices(id: string) {
   try {
     await generateDueScheduledInvoices(dbPool, { leadId: id });
     const { rows } = await dbPool.query(
-      `select i.*,
+      `select i.id,
+              i.invoice_number,
+              i.title,
+              i.amount_cents,
+              i.currency,
+              i.status,
+              i.due_date::text as due_date,
+              i.notes,
+              i.paid_at,
+              i.created_at,
+              i.schedule_id,
               s.frequency as schedule_frequency,
               s.active as schedule_active,
               coalesce((select sum(p.amount_cents) from invoice_payments p where p.invoice_id = i.id), 0)::int as paid_cents
@@ -99,7 +109,12 @@ export async function getLeadInvoices(id: string) {
        order by i.created_at desc`,
       [id]
     );
-    return rows;
+    return serializeForClient(
+      rows.map((row) => ({
+        ...row,
+        due_date: toDateOnlyString(row.due_date),
+      }))
+    );
   } catch {
     return [];
   }

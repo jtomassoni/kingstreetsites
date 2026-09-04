@@ -301,15 +301,37 @@ export function dollarsToCents(dollars: number): number {
 }
 
 /**
+ * Calendar YYYY-MM-DD from a Postgres `date`, Date, or ISO string.
+ * node-pg returns DATE columns as Date (local midnight); Next.js client props need strings.
+ */
+export function toDateOnlyString(value: unknown): string | null {
+  if (value == null || value === "") return null;
+  if (value instanceof Date) {
+    if (Number.isNaN(value.getTime())) return null;
+    const y = value.getFullYear();
+    const m = String(value.getMonth() + 1).padStart(2, "0");
+    const d = String(value.getDate()).padStart(2, "0");
+    return `${y}-${m}-${d}`;
+  }
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(value));
+  return match ? match[0] : null;
+}
+
+/** JSON-serialize pg rows so Date fields can cross the Server → Client Component boundary. */
+export function serializeForClient<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value)) as T;
+}
+
+/**
  * Format a Postgres `date` / YYYY-MM-DD string for display.
  * Avoids `new Date("YYYY-MM-DD")` which is UTC midnight and shifts a day in US timezones.
  */
 export function formatDateOnly(
-  value: string | null | undefined,
+  value: string | Date | null | undefined,
   opts: Intl.DateTimeFormatOptions = { month: "numeric", day: "numeric", year: "numeric" }
 ): string {
-  if (!value) return "";
-  const iso = value.slice(0, 10);
+  const iso = toDateOnlyString(value);
+  if (!iso) return "";
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
   if (!match) return iso;
   const y = Number(match[1]);

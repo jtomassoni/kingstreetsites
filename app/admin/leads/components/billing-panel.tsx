@@ -12,6 +12,7 @@ import {
   centsToDollars,
   formatMoney,
   formatDateOnly,
+  toDateOnlyString,
   type InvoiceStatus,
   type PaymentMethod,
   type RecurringFrequency,
@@ -85,9 +86,8 @@ const CREATE_INVOICE_BASELINE = {
 };
 
 
-function formatInputDate(value: string | null) {
-  if (!value) return "";
-  return value.slice(0, 10);
+function formatInputDate(value: string | Date | null) {
+  return toDateOnlyString(value) ?? "";
 }
 
 function formatPaymentDate(value: string) {

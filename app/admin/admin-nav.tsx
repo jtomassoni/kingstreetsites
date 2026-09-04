@@ -7,6 +7,7 @@ import { crm } from "@/lib/admin-ui";
 const PRIMARY = [
   { href: "/admin/leads", label: "People", match: (p: string) => p.startsWith("/admin/leads") },
   { href: "/admin/billing", label: "Billing", match: (p: string) => p.startsWith("/admin/billing") },
+  { href: "/admin/tax", label: "Tax", match: (p: string) => p.startsWith("/admin/tax") },
 ];
 
 export default function AdminNav({

@@ -30,6 +30,7 @@ export async function GET(
 
   const { rows } = await dbPool.query(
     `select i.*,
+            i.due_date::text as due_date,
             s.frequency as schedule_frequency,
             s.active as schedule_active,
             coalesce((select sum(p.amount_cents) from invoice_payments p where p.invoice_id = i.id), 0)::int as paid_cents

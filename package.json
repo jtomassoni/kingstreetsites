@@ -11,6 +11,7 @@
     "db:schema": "node scripts/psql-with-env.mjs lib/db-schema.sql",
     "migrate:lead-crm": "node scripts/psql-with-env.mjs lib/db-migrate-lead-crm.sql",
     "migrate:billing": "node scripts/psql-with-env.mjs lib/db-migrate-billing.sql",
+    "migrate:tax": "node scripts/psql-with-env.mjs lib/db-migrate-tax.sql",
     "migrate:franchise-groups": "node scripts/psql-with-env.mjs lib/db-migrate-franchise-groups.sql",
     "reset": "node scripts/psql-with-env.mjs lib/db-reset-dev.sql"
   },

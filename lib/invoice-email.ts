@@ -121,7 +121,7 @@ export function buildInvoiceEmailPreviewFromTemplate(opts: {
 
 async function loadInvoiceEmailContext(pool: Pool, invoiceId: string) {
   const { rows: invoiceRows } = await pool.query<InvoiceRow>(
-    `select id, lead_id, invoice_number, title, amount_cents, currency, status, due_date, notes
+    `select id, lead_id, invoice_number, title, amount_cents, currency, status, due_date::text as due_date, notes
      from invoices where id = $1`,
     [invoiceId]
   );

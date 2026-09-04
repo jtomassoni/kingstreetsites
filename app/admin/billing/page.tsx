@@ -15,6 +15,7 @@ async function getInvoices(status?: string) {
   const { rows } = await dbPool.query(
     `select
        i.*,
+       i.due_date::text as due_date,
        l.business_name,
        coalesce((select sum(p.amount_cents) from invoice_payments p where p.invoice_id = i.id), 0)::int as paid_cents
      from invoices i
