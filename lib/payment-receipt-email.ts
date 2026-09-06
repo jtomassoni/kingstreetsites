@@ -64,7 +64,15 @@ export function buildPaymentReceiptEmailText(
     "",
     "Thank you — we've received your payment.",
     "",
-    `Payment: ${formatMoney(payment.amount_cents, invoice.currency)} via ${methodLabel}`,
+    `Payment: ${formatMoney(payment.amount_cents, invoice.currency)}`,
+    `Payment type: ${methodLabel}`,
+  ];
+
+  if (payment.notes?.trim()) {
+    lines.push(`Reason: ${payment.notes.trim()}`);
+  }
+
+  lines.push(
     `Date: ${formatPaymentDate(payment.paid_at)}`,
     `Invoice: ${invoice.invoice_number} · ${invoice.title}`,
     "",
@@ -73,17 +81,11 @@ export function buildPaymentReceiptEmailText(
     remaining > 0
       ? `Balance due: ${formatMoney(remaining, invoice.currency)}`
       : "Balance due: $0.00 — paid in full",
-  ];
-
-  if (payment.notes?.trim()) {
-    lines.push("", payment.notes.trim());
-  }
-
-  lines.push(
     "",
     "Reply to this email if you have any questions.",
     "",
     "Thank you,",
+    "James T",
     "King Street Sites"
   );
 

@@ -210,6 +210,7 @@ create table if not exists invoice_schedules (
   next_run_on date not null,
   end_on date,
   active boolean not null default true,
+  auto_send boolean not null default false,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );

@@ -1,6 +1,7 @@
 import { ensureLeadCrmSchema } from "@/lib/lead-schema";
 import { ensureOutreachSchema } from "@/lib/outreach-schema";
-import { ensureBillingSchema, generateDueScheduledInvoices, serializeForClient, toDateOnlyString } from "@/lib/billing";
+import { ensureBillingSchema, serializeForClient, toDateOnlyString } from "@/lib/billing";
+import { processDueScheduledInvoices } from "@/lib/invoice-email";
 import { ensureLeadSiteIssuesSchema } from "@/lib/lead-site-issues";
 import { dbPool } from "@/lib/db";
 
@@ -87,7 +88,7 @@ export async function getLeadSiteIssues(id: string) {
 export async function getLeadInvoices(id: string) {
   await ensureBillingSchema(dbPool);
   try {
-    await generateDueScheduledInvoices(dbPool, { leadId: id });
+    await processDueScheduledInvoices(dbPool, { leadId: id });
     const { rows } = await dbPool.query(
       `select i.id,
               i.invoice_number,
@@ -102,6 +103,7 @@ export async function getLeadInvoices(id: string) {
               i.schedule_id,
               s.frequency as schedule_frequency,
               s.active as schedule_active,
+              s.auto_send as schedule_auto_send,
               coalesce((select sum(p.amount_cents) from invoice_payments p where p.invoice_id = i.id), 0)::int as paid_cents
        from invoices i
        left join invoice_schedules s on s.id = i.schedule_id

@@ -48,6 +48,7 @@ export type InvoiceRow = {
   schedule_id?: string | null;
   schedule_frequency?: RecurringFrequency | null;
   schedule_active?: boolean | null;
+  schedule_auto_send?: boolean | null;
 };
 
 type PaymentRow = {
@@ -83,6 +84,7 @@ const CREATE_INVOICE_BASELINE = {
   recurring: false,
   frequency: "monthly" as RecurringFrequency,
   endOn: "",
+  autoSend: false,
 };
 
 
@@ -225,7 +227,7 @@ function ReceiptFilePicker({
 }
 
 function activityBadgeTone(eventType: string): "good" | "neutral" | "warn" {
-  if (eventType === "payment_deleted") return "warn";
+  if (eventType === "payment_deleted" || eventType === "invoice_send_failed") return "warn";
   if (eventType === "invoice_sent" || eventType === "payment_receipt_sent") return "good";
   if (eventType.startsWith("payment")) return "good";
   return "neutral";
@@ -284,6 +286,7 @@ export default function BillingPanel({
   const [recurring, setRecurring] = useState(false);
   const [frequency, setFrequency] = useState<RecurringFrequency>("monthly");
   const [endOn, setEndOn] = useState("");
+  const [autoSend, setAutoSend] = useState(CREATE_INVOICE_BASELINE.autoSend);
   const [sendOnCreate, setSendOnCreate] = useState(() => Boolean(contactEmail?.trim()));
   const [createFeedback, setCreateFeedback] = useState("");
   const [invoiceTemplates, setInvoiceTemplates] = useState<InvoiceTemplate[]>([]);
@@ -447,6 +450,7 @@ export default function BillingPanel({
     setRecurring(CREATE_INVOICE_BASELINE.recurring);
     setFrequency(CREATE_INVOICE_BASELINE.frequency);
     setEndOn(CREATE_INVOICE_BASELINE.endOn);
+    setAutoSend(CREATE_INVOICE_BASELINE.autoSend);
     setSendOnCreate(Boolean(contactEmail?.trim()));
     setSelectedTemplateId("");
     setCreateFeedback("");
@@ -462,6 +466,7 @@ export default function BillingPanel({
 
   function openCreateModal() {
     setCreateFeedback("");
+    setAutoSend(CREATE_INVOICE_BASELINE.autoSend);
     setSendOnCreate(Boolean(contactEmail?.trim()));
     setSelectedTemplateId("");
     setShowCreateModal(true);
@@ -517,6 +522,7 @@ export default function BillingPanel({
         recurring,
         frequency: recurring ? frequency : undefined,
         end_on: recurring && endOn ? endOn : null,
+        auto_send: recurring ? autoSend : false,
         send_email: sendOnCreate,
       }),
     });
@@ -531,7 +537,13 @@ export default function BillingPanel({
     } else if (sendOnCreate && data.send?.error) {
       setFeedback(`Invoice created, but the email could not be sent: ${data.send.error}`);
     } else {
-      setFeedback(recurring ? "Recurring invoice created." : "Invoice created.");
+      setFeedback(
+        recurring
+          ? autoSend
+            ? "Recurring invoice created. Future invoices will be emailed automatically."
+            : "Recurring invoice created."
+          : "Invoice created."
+      );
     }
     await refresh();
   }
@@ -558,6 +570,27 @@ export default function BillingPanel({
     }
     setFeedback("Invoice updated.");
     await reloadEditInvoice();
+  }
+
+  async function toggleScheduleAutoSend(next: boolean) {
+    if (!editInvoiceId || !editInvoice?.schedule_id) return;
+    const scheduleId = editInvoice.schedule_id;
+    setEditFeedback("");
+    const res = await fetch(`/api/invoices/${editInvoiceId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ auto_send: next }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setEditFeedback(data?.error ?? "Could not update auto-send.");
+      return;
+    }
+    setEditInvoice((inv) => (inv ? { ...inv, schedule_auto_send: next } : inv));
+    setInvoices((list) =>
+      list.map((inv) => (inv.schedule_id === scheduleId ? { ...inv, schedule_auto_send: next } : inv))
+    );
+    setFeedback(next ? "Auto-send enabled for this recurring invoice." : "Auto-send turned off.");
   }
 
   async function addPayment(e: React.FormEvent) {
@@ -924,7 +957,7 @@ export default function BillingPanel({
 
   const createSendDefault = Boolean(contactEmail?.trim());
   const createDirty = isFormDirty(
-    { title, amount, dueDate, notes, recurring, frequency, endOn, sendOnCreate },
+    { title, amount, dueDate, notes, recurring, frequency, endOn, sendOnCreate, autoSend },
     { ...CREATE_INVOICE_BASELINE, sendOnCreate: createSendDefault }
   );
 
@@ -1075,6 +1108,9 @@ export default function BillingPanel({
                                 {RECURRING_FREQUENCY_LABEL[inv.schedule_frequency]}
                                 {inv.schedule_active === false ? " · ended" : ""}
                               </span>
+                            ) : null}
+                            {inv.schedule_id && inv.schedule_auto_send && inv.schedule_active !== false ? (
+                              <span className={crm.badge("good")}>Auto-send</span>
                             ) : null}
                           </div>
                           <p className="text-sm font-medium text-crm-text">{inv.title}</p>
@@ -1234,6 +1270,25 @@ export default function BillingPanel({
                         className={`${crm.input} [color-scheme:dark]`}
                       />
                     </div>
+                    <label
+                      className={`sm:col-span-2 flex items-start gap-3 ${hasContactEmail ? "cursor-pointer" : "cursor-not-allowed opacity-60"}`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={autoSend}
+                        onChange={(e) => setAutoSend(e.target.checked)}
+                        disabled={!hasContactEmail}
+                        className="mt-0.5 size-4 rounded border-crm-border bg-crm-raised accent-crm-accent disabled:cursor-not-allowed"
+                      />
+                      <span>
+                        <span className="block text-sm font-medium text-crm-text">Auto-send each invoice</span>
+                        <span className="mt-0.5 block text-xs text-crm-faint">
+                          {hasContactEmail
+                            ? "Email the customer when each new invoice is generated."
+                            : "Add a contact email on this lead to auto-send invoices."}
+                        </span>
+                      </span>
+                    </label>
                   </div>
                 ) : null}
               </div>
@@ -1255,7 +1310,9 @@ export default function BillingPanel({
                     </span>
                     <span className="mt-0.5 block text-xs text-crm-faint">
                       {hasContactEmail
-                        ? "Email the invoice to the lead when it’s created."
+                        ? recurring
+                          ? "Email this first invoice now. Auto-send above covers later invoices in the series."
+                          : "Email the invoice to the lead when it’s created."
                         : "Add a contact email on this lead to send invoices."}
                     </span>
                   </span>
@@ -1383,6 +1440,38 @@ export default function BillingPanel({
                       />
                     </label>
                   </form>
+
+                  {editInvoice?.schedule_id ? (
+                    <div className="rounded-lg border border-crm-border bg-crm-bg/40 px-3 py-3">
+                      <label
+                        className={`flex items-start gap-3 ${
+                          hasContactEmail && editInvoice.schedule_active !== false
+                            ? "cursor-pointer"
+                            : "cursor-not-allowed opacity-60"
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={Boolean(editInvoice.schedule_auto_send)}
+                          onChange={(e) => void toggleScheduleAutoSend(e.target.checked)}
+                          disabled={!hasContactEmail || editInvoice.schedule_active === false}
+                          className="mt-0.5 size-4 rounded border-crm-border bg-crm-raised accent-crm-accent disabled:cursor-not-allowed"
+                        />
+                        <span>
+                          <span className="block text-sm font-medium text-crm-text">
+                            Auto-send each invoice
+                          </span>
+                          <span className="mt-0.5 block text-xs text-crm-faint">
+                            {editInvoice.schedule_active === false
+                              ? "This recurring series has ended."
+                              : hasContactEmail
+                                ? "Email the customer when each new invoice in this series is generated."
+                                : "Add a contact email on this lead to auto-send invoices."}
+                          </span>
+                        </span>
+                      </label>
+                    </div>
+                  ) : null}
 
                   <div className="border-t border-crm-border pt-5">
                     <h4 className={crm.fieldLabel}>Payments</h4>

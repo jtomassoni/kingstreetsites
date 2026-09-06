@@ -4,7 +4,14 @@ import {
   isValidEmail,
   sendOutreachEmail,
 } from "@/lib/outreach-email";
-import { formatMoney, formatDateOnly, type InvoiceStatus } from "@/lib/billing";
+import {
+  formatMoney,
+  formatDateOnly,
+  generateDueScheduledInvoices,
+  type GeneratedScheduledInvoice,
+  type InvoiceStatus,
+} from "@/lib/billing";
+import { ensureOutreachSchema } from "@/lib/outreach-schema";
 
 type InvoiceRow = {
   id: string;
@@ -24,6 +31,13 @@ type LeadRow = {
   contact_email: string | null;
 };
 
+type PastDueBalance = {
+  invoice_number: string;
+  remaining_cents: number;
+  currency: string;
+  due_date: string | null;
+};
+
 function formatDueDate(iso: string | null): string | null {
   if (!iso) return null;
   return formatDateOnly(iso, {
@@ -31,6 +45,34 @@ function formatDueDate(iso: string | null): string | null {
     day: "numeric",
     year: "numeric",
   });
+}
+
+function formatPastDueLines(items: PastDueBalance[]): string[] {
+  if (items.length === 0) return [];
+
+  function itemLabel(item: PastDueBalance): string {
+    const amount = formatMoney(item.remaining_cents, item.currency);
+    const due = formatDueDate(item.due_date);
+    return due ? `${item.invoice_number} — ${amount} (due ${due})` : `${item.invoice_number} — ${amount}`;
+  }
+
+  if (items.length === 1) {
+    const item = items[0];
+    const amount = formatMoney(item.remaining_cents, item.currency);
+    const due = formatDueDate(item.due_date);
+    const dueBit = due ? ` (due ${due})` : "";
+    return [`You also have ${amount} past due on invoice ${item.invoice_number}${dueBit}.`];
+  }
+
+  const sameCurrency = items.every((item) => item.currency === items[0].currency);
+  const total = items.reduce((sum, item) => sum + item.remaining_cents, 0);
+  const lines = [
+    sameCurrency
+      ? `You also have ${formatMoney(total, items[0].currency)} past due on other invoices:`
+      : "You also have past-due balances on other invoices:",
+  ];
+  for (const item of items) lines.push(itemLabel(item));
+  return lines;
 }
 
 function greeting(lead: LeadRow): string {
@@ -44,7 +86,7 @@ export function buildInvoiceEmailText(
   invoice: InvoiceRow,
   paidCents: number,
   lead: LeadRow,
-  opts: { comments?: string | null } = {}
+  opts: { comments?: string | null; pastDue?: PastDueBalance[] } = {}
 ): { subject: string; message: string } {
   const remaining = Math.max(0, invoice.amount_cents - paidCents);
   const dueLabel = formatDueDate(invoice.due_date);
@@ -81,11 +123,17 @@ export function buildInvoiceEmailText(
     lines.push("", invoice.notes.trim());
   }
 
+  const pastDueLines = formatPastDueLines(opts.pastDue ?? []);
+  if (pastDueLines.length) {
+    lines.push("", ...pastDueLines);
+  }
+
   lines.push(
     "",
     "Reply to this email if you have any questions or need to arrange payment.",
     "",
     "Thank you,",
+    "James T",
     "King Street Sites"
   );
 
@@ -143,7 +191,31 @@ async function loadInvoiceEmailContext(pool: Pool, invoiceId: string) {
   );
   const paidCents = paidRes.rows[0]?.paid ?? 0;
 
-  return { invoice, lead, to, paidCents };
+  const { rows: pastDueRows } = await pool.query<PastDueBalance>(
+    `select
+       i.invoice_number,
+       i.currency,
+       i.due_date::text as due_date,
+       greatest(i.amount_cents - p.paid, 0)::int as remaining_cents
+     from invoices i
+     left join lateral (
+       select coalesce(sum(amount_cents), 0)::int as paid
+       from invoice_payments
+       where invoice_id = i.id
+     ) p on true
+     where i.lead_id = $1
+       and i.id <> $2
+       and i.status not in ('draft', 'paid', 'void')
+       and i.amount_cents > p.paid
+       and (
+         i.status = 'overdue'
+         or (i.due_date is not null and i.due_date < current_date)
+       )
+     order by i.due_date asc nulls last, i.invoice_number asc`,
+    [invoice.lead_id, invoiceId]
+  );
+
+  return { invoice, lead, to, paidCents, pastDue: pastDueRows };
 }
 
 function assertInvoiceCanBeSent(invoice: InvoiceRow, to: string) {
@@ -167,12 +239,12 @@ export async function getInvoiceEmailDraft(
   invoiceId: string,
   opts: { comments?: string | null } = {}
 ) {
-  const { invoice, lead, to, paidCents } = await loadInvoiceEmailContext(pool, invoiceId);
+  const { invoice, lead, to, paidCents, pastDue } = await loadInvoiceEmailContext(pool, invoiceId);
   assertInvoiceCanBeSent(invoice, to);
 
   const comments =
     typeof opts.comments === "string" && opts.comments.trim() ? opts.comments.trim() : null;
-  const { subject, message } = buildInvoiceEmailText(invoice, paidCents, lead, { comments });
+  const { subject, message } = buildInvoiceEmailText(invoice, paidCents, lead, { comments, pastDue });
 
   return {
     to,
@@ -199,12 +271,12 @@ export async function sendInvoiceEmail(
   invoiceId: string,
   opts: { by?: string; comments?: string | null } = {}
 ): Promise<{ messageId: string | null; to: string }> {
-  const { invoice, lead, to, paidCents } = await loadInvoiceEmailContext(pool, invoiceId);
+  const { invoice, lead, to, paidCents, pastDue } = await loadInvoiceEmailContext(pool, invoiceId);
   assertInvoiceCanBeSent(invoice, to);
 
   const comments =
     typeof opts.comments === "string" && opts.comments.trim() ? opts.comments.trim() : null;
-  const { subject, message } = buildInvoiceEmailText(invoice, paidCents, lead, { comments });
+  const { subject, message } = buildInvoiceEmailText(invoice, paidCents, lead, { comments, pastDue });
   const inboundReplyTo = buildLeadInboundReplyTo(invoice.lead_id);
 
   let sent: { id: string | null; fromEmail: string; from: string };
@@ -251,4 +323,58 @@ export async function sendInvoiceEmail(
   );
 
   return { messageId: sent.id, to };
+}
+
+export async function autoSendGeneratedInvoices(
+  pool: Pool,
+  generated: GeneratedScheduledInvoice[],
+  opts: { by?: string } = {}
+): Promise<{ sent: number; failed: number }> {
+  let sent = 0;
+  let failed = 0;
+  const by = opts.by ?? "system";
+
+  for (const item of generated) {
+    if (!item.autoSend) continue;
+    try {
+      await sendInvoiceEmail(pool, item.invoiceId, { by });
+      sent += 1;
+    } catch (err) {
+      failed += 1;
+      const message = err instanceof Error ? err.message : "Failed to auto-send invoice";
+      await pool.query(
+        `insert into lead_timeline_events (lead_id, event_type, title, body, metadata)
+         values ($1, 'invoice_send_failed', 'Invoice auto-send failed', $2, $3::jsonb)`,
+        [
+          item.leadId,
+          message,
+          JSON.stringify({
+            invoiceId: item.invoiceId,
+            scheduleId: item.scheduleId,
+            error: message,
+            by,
+          }),
+        ]
+      );
+    }
+  }
+
+  return { sent, failed };
+}
+
+/** Generate due recurring invoices and email any with auto-send enabled. */
+export async function processDueScheduledInvoices(
+  pool: Pool,
+  opts: { leadId?: string; createdBy?: string } = {}
+): Promise<{ created: number; sent: number; failed: number }> {
+  await ensureOutreachSchema(pool);
+  const generated = await generateDueScheduledInvoices(pool, opts);
+  const sendResult = await autoSendGeneratedInvoices(pool, generated, {
+    by: opts.createdBy ?? "system",
+  });
+  return {
+    created: generated.length,
+    sent: sendResult.sent,
+    failed: sendResult.failed,
+  };
 }

@@ -22,7 +22,14 @@ export async function GET(
   await ensureBillingSchema(dbPool);
 
   const { rows: invoiceRows } = await dbPool.query(
-    `select i.*, i.due_date::text as due_date from invoices i where i.id = $1`,
+    `select i.*,
+            i.due_date::text as due_date,
+            s.frequency as schedule_frequency,
+            s.active as schedule_active,
+            s.auto_send as schedule_auto_send
+     from invoices i
+     left join invoice_schedules s on s.id = i.schedule_id
+     where i.id = $1`,
     [id]
   );
   if (!invoiceRows[0]) return NextResponse.json({ error: "Invoice not found" }, { status: 404 });
@@ -60,7 +67,7 @@ export async function PATCH(
   await ensureOutreachSchema(dbPool);
 
   const existingRes = await dbPool.query(
-    `select lead_id, invoice_number, status from invoices where id = $1`,
+    `select lead_id, invoice_number, status, schedule_id from invoices where id = $1`,
     [id]
   );
   const existing = existingRes.rows[0];
@@ -69,6 +76,19 @@ export async function PATCH(
   const updates: string[] = [];
   const values: unknown[] = [];
   const changedFields: string[] = [];
+  let scheduleAutoSend: boolean | null = null;
+
+  if ("auto_send" in body) {
+    if (!existing.schedule_id) {
+      return NextResponse.json({ error: "Not a recurring invoice" }, { status: 400 });
+    }
+    scheduleAutoSend = Boolean(body.auto_send);
+    await dbPool.query(
+      `update invoice_schedules set auto_send = $2, updated_at = now() where id = $1`,
+      [existing.schedule_id, scheduleAutoSend]
+    );
+    changedFields.push("auto-send");
+  }
 
   if ("title" in body && typeof body.title === "string" && body.title.trim()) {
     values.push(body.title.trim());
@@ -109,51 +129,83 @@ export async function PATCH(
     changedFields.push("notes");
   }
 
-  if (!updates.length) {
+  if (!updates.length && scheduleAutoSend === null) {
     return NextResponse.json({ error: "No fields to update" }, { status: 400 });
   }
 
-  values.push(id);
-  const { rows } = await dbPool.query(
-    `update invoices
-     set ${updates.join(", ")}, updated_at = now()
-     where id = $${values.length}
-     returning *`,
-    values
-  );
+  let invoiceRow = null as Record<string, unknown> | null;
+  if (updates.length) {
+    values.push(id);
+    const { rows } = await dbPool.query(
+      `update invoices
+       set ${updates.join(", ")}, updated_at = now()
+       where id = $${values.length}
+       returning *`,
+      values
+    );
+    if (!rows[0]) return NextResponse.json({ error: "Invoice not found" }, { status: 404 });
+    invoiceRow = rows[0];
+  } else {
+    const { rows } = await dbPool.query(`select * from invoices where id = $1`, [id]);
+    invoiceRow = rows[0] ?? null;
+  }
 
-  if (!rows[0]) return NextResponse.json({ error: "Invoice not found" }, { status: 404 });
+  if (!invoiceRow) return NextResponse.json({ error: "Invoice not found" }, { status: 404 });
+  let invoice = invoiceRow;
 
   if ("amount" in body) {
     await syncInvoiceStatusFromPayments(dbPool, id);
     const refreshed = await dbPool.query(`select * from invoices where id = $1`, [id]);
-    if (refreshed.rows[0]) rows[0] = refreshed.rows[0];
+    if (refreshed.rows[0]) invoice = refreshed.rows[0];
   }
 
   if (changedFields.length > 0) {
     const by = session.user?.email ?? "unknown";
     const bodyText =
-      "status" in body && changedFields.includes("status")
-        ? `${rows[0].invoice_number} → ${body.status}`
-        : `${rows[0].invoice_number} · ${changedFields.join(", ")} updated`;
+      scheduleAutoSend !== null && changedFields.length === 1
+        ? `${invoice.invoice_number} · auto-send ${scheduleAutoSend ? "on" : "off"}`
+        : "status" in body && changedFields.includes("status")
+          ? `${invoice.invoice_number} → ${body.status}`
+          : `${invoice.invoice_number} · ${changedFields.join(", ")} updated`;
 
     await dbPool.query(
       `insert into lead_timeline_events (lead_id, event_type, title, body, metadata)
        values ($1, 'invoice_updated', 'Invoice updated', $2, $3::jsonb)`,
       [
-        rows[0].lead_id,
+        invoice.lead_id,
         bodyText,
         JSON.stringify({
           invoiceId: id,
-          status: body.status ?? rows[0].status,
+          status: body.status ?? invoice.status,
           changedFields,
+          autoSend: scheduleAutoSend,
           by,
         }),
       ]
     );
   }
 
-  return NextResponse.json({ ok: true, invoice: rows[0] });
+  const scheduleRes = existing.schedule_id
+    ? await dbPool.query<{
+        frequency: string;
+        active: boolean;
+        auto_send: boolean;
+      }>(
+        `select frequency, active, auto_send from invoice_schedules where id = $1`,
+        [existing.schedule_id]
+      )
+    : { rows: [] as { frequency: string; active: boolean; auto_send: boolean }[] };
+  const schedule = scheduleRes.rows[0];
+
+  return NextResponse.json({
+    ok: true,
+    invoice: {
+      ...invoice,
+      schedule_frequency: schedule?.frequency ?? null,
+      schedule_active: schedule?.active ?? null,
+      schedule_auto_send: schedule?.auto_send ?? null,
+    },
+  });
 }
 
 export async function DELETE(

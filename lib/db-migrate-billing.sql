@@ -51,6 +51,7 @@ create table if not exists invoice_schedules (
   next_run_on date not null,
   end_on date,
   active boolean not null default true,
+  auto_send boolean not null default false,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -61,6 +62,10 @@ create index if not exists invoice_schedules_next_run_idx
 
 alter table invoices add column if not exists schedule_id uuid references invoice_schedules(id) on delete set null;
 create index if not exists invoices_schedule_id_idx on invoices (schedule_id);
+
+alter table invoice_schedules add column if not exists auto_send boolean not null default false;
+alter table invoice_schedules alter column auto_send set default false;
+-- Existing series stay opted out; auto-send is only enabled from the per-invoice toggle.
 
 alter table invoice_payments add column if not exists receipts jsonb not null default '[]'::jsonb;
 

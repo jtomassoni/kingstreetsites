@@ -49,6 +49,7 @@ async function runEnsureBillingSchema(pool: Pool) {
       next_run_on date not null,
       end_on date,
       active boolean not null default true,
+      auto_send boolean not null default false,
       created_at timestamptz not null default now(),
       updated_at timestamptz not null default now()
     );
@@ -68,6 +69,9 @@ async function runEnsureBillingSchema(pool: Pool) {
 
     alter table invoices add column if not exists schedule_id uuid references invoice_schedules(id) on delete set null;
     create index if not exists invoices_schedule_id_idx on invoices (schedule_id);
+
+    alter table invoice_schedules add column if not exists auto_send boolean not null default false;
+    alter table invoice_schedules alter column auto_send set default false;
 
     alter table invoice_payments add column if not exists receipts jsonb not null default '[]'::jsonb;
 
@@ -188,11 +192,18 @@ function todayIsoDate(): string {
   return `${y}-${m}-${d}`;
 }
 
+export type GeneratedScheduledInvoice = {
+  invoiceId: string;
+  scheduleId: string;
+  leadId: string;
+  autoSend: boolean;
+};
+
 /** Create draft invoices for any active schedules that are due (lazy cron). */
 export async function generateDueScheduledInvoices(
   pool: Pool,
   opts: { leadId?: string; createdBy?: string } = {}
-): Promise<number> {
+): Promise<GeneratedScheduledInvoice[]> {
   await ensureBillingSchema(pool);
   const today = todayIsoDate();
   const params: unknown[] = [today];
@@ -212,9 +223,10 @@ export async function generateDueScheduledInvoices(
     frequency: RecurringFrequency;
     next_run_on: string;
     end_on: string | null;
+    auto_send: boolean;
   }>(
     `select id, lead_id, title, amount_cents, currency, notes, frequency,
-            next_run_on::text, end_on::text
+            next_run_on::text, end_on::text, auto_send
      from invoice_schedules
      where active = true
        and next_run_on <= $1::date
@@ -224,7 +236,7 @@ export async function generateDueScheduledInvoices(
     params
   );
 
-  let created = 0;
+  const generated: GeneratedScheduledInvoice[] = [];
   for (const schedule of schedules) {
     let nextRun = schedule.next_run_on.slice(0, 10);
     // Catch up if the app wasn't opened for a while (cap per schedule).
@@ -255,6 +267,7 @@ export async function generateDueScheduledInvoices(
         ]
       );
 
+      const invoiceId = rows[0].id as string;
       await pool.query(
         `insert into lead_timeline_events (lead_id, event_type, title, body, metadata)
          values ($1, 'invoice_created', 'Recurring invoice created', $2, $3::jsonb)`,
@@ -262,16 +275,22 @@ export async function generateDueScheduledInvoices(
           schedule.lead_id,
           `${invoiceNumber} · ${schedule.title}`,
           JSON.stringify({
-            invoiceId: rows[0].id,
+            invoiceId,
             scheduleId: schedule.id,
             amountCents: schedule.amount_cents,
             recurring: true,
+            autoSend: schedule.auto_send,
             by: opts.createdBy ?? "system",
           }),
         ]
       );
 
-      created += 1;
+      generated.push({
+        invoiceId,
+        scheduleId: schedule.id,
+        leadId: schedule.lead_id,
+        autoSend: Boolean(schedule.auto_send),
+      });
       nextRun = advanceRecurringDate(nextRun, schedule.frequency);
 
       if (schedule.end_on && nextRun > schedule.end_on.slice(0, 10)) {
@@ -293,7 +312,7 @@ export async function generateDueScheduledInvoices(
     }
   }
 
-  return created;
+  return generated;
 }
 
 export function dollarsToCents(dollars: number): number {

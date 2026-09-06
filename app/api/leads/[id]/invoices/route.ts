@@ -8,11 +8,10 @@ import {
   INVOICE_STATUSES,
   RECURRING_FREQUENCIES,
   advanceRecurringDate,
-  generateDueScheduledInvoices,
   type RecurringFrequency,
 } from "@/lib/billing";
 import { ensureOutreachSchema } from "@/lib/outreach-schema";
-import { InvoiceSendError, sendInvoiceEmail } from "@/lib/invoice-email";
+import { InvoiceSendError, processDueScheduledInvoices, sendInvoiceEmail } from "@/lib/invoice-email";
 
 export async function GET(
   _req: NextRequest,
@@ -23,7 +22,7 @@ export async function GET(
 
   const { id } = await params;
   await ensureBillingSchema(dbPool);
-  await generateDueScheduledInvoices(dbPool, {
+  await processDueScheduledInvoices(dbPool, {
     leadId: id,
     createdBy: session.user?.email ?? "unknown",
   });
@@ -33,6 +32,7 @@ export async function GET(
             i.due_date::text as due_date,
             s.frequency as schedule_frequency,
             s.active as schedule_active,
+            s.auto_send as schedule_auto_send,
             coalesce((select sum(p.amount_cents) from invoice_payments p where p.invoice_id = i.id), 0)::int as paid_cents
      from invoices i
      left join invoice_schedules s on s.id = i.schedule_id
@@ -75,6 +75,7 @@ export async function POST(
   const endOn =
     typeof body.end_on === "string" && body.end_on.trim() ? body.end_on.trim() : null;
   const sendEmail = Boolean(body.send_email);
+  const autoSend = recurring && Boolean(body.auto_send);
 
   if (recurring) {
     if (!frequency) {
@@ -108,10 +109,10 @@ export async function POST(
     const nextRun = advanceRecurringDate(dueDate, frequency);
     const scheduleRes = await dbPool.query(
       `insert into invoice_schedules
-        (lead_id, title, amount_cents, notes, frequency, next_run_on, end_on, active)
-       values ($1, $2, $3, $4, $5, $6, $7, true)
+        (lead_id, title, amount_cents, notes, frequency, next_run_on, end_on, active, auto_send)
+       values ($1, $2, $3, $4, $5, $6, $7, true, $8)
        returning id`,
-      [id, title, amountCents, notes, frequency, nextRun, endOn]
+      [id, title, amountCents, notes, frequency, nextRun, endOn, autoSend]
     );
     scheduleId = scheduleRes.rows[0].id as string;
   }
@@ -137,6 +138,7 @@ export async function POST(
         amountCents,
         recurring,
         frequency: recurring ? frequency : null,
+        autoSend: recurring ? autoSend : false,
         by: session.user?.email ?? "unknown",
       }),
     ]

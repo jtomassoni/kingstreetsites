@@ -13,6 +13,7 @@ export type InvoiceActivityEvent = {
 const INVOICE_EVENT_TYPES = [
   "invoice_created",
   "invoice_sent",
+  "invoice_send_failed",
   "invoice_updated",
   "payment_recorded",
   "payment_receipt_sent",
@@ -75,6 +76,8 @@ export function invoiceActivityLabel(eventType: string): string {
       return "Created";
     case "invoice_sent":
       return "Sent";
+    case "invoice_send_failed":
+      return "Send failed";
     case "invoice_updated":
       return "Updated";
     case "payment_recorded":
