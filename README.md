@@ -33,6 +33,9 @@ Monaghan's is included in the portfolio as an existing reference project but doe
 - Summit Air Denver (home service demo)
 - Elevate Remodeling (home service demo)
 
+## Household tools
+Private Meal Planner, Movie List, and arcade live under `/tools` (see [docs/TOOLS.md](docs/TOOLS.md)). They use a separate env-based session from the business `/admin` login.
+
 ## Environment variables
 Create a `.env.local` file with:
 

@@ -1,7 +1,13 @@
 import type { Config } from "tailwindcss";
 
 const config: Config = {
-  content: ["./app/**/*.{js,ts,jsx,tsx}", "./components/**/*.{js,ts,jsx,tsx}", "./lib/**/*.{js,ts,jsx,tsx}"],
+  darkMode: ["selector", '[data-theme="dark"]'],
+  content: [
+    "./app/**/*.{js,ts,jsx,tsx}",
+    "./components/**/*.{js,ts,jsx,tsx}",
+    "./lib/**/*.{js,ts,jsx,tsx}",
+    "./modules/**/*.{js,ts,jsx,tsx}",
+  ],
   theme: {
     extend: {
       colors: {
@@ -34,11 +40,42 @@ const config: Config = {
         accent: {
           warm: "#d97706",
           rose: "#e11d48"
-        }
+        },
+        background: "var(--background)",
+        foreground: "var(--foreground)",
+        card: {
+          DEFAULT: "var(--card)",
+          foreground: "var(--card-foreground)",
+        },
+        popover: {
+          DEFAULT: "var(--popover)",
+          foreground: "var(--popover-foreground)",
+        },
+        primary: {
+          DEFAULT: "var(--primary, #0d9488)",
+          foreground: "var(--primary-foreground, #eef6f1)",
+        },
+        secondary: {
+          DEFAULT: "var(--secondary)",
+          foreground: "var(--secondary-foreground)",
+        },
+        muted: {
+          DEFAULT: "var(--muted)",
+          foreground: "var(--muted-foreground)",
+        },
+        destructive: {
+          DEFAULT: "var(--destructive)",
+          foreground: "var(--destructive-foreground)",
+        },
+        border: "var(--border)",
+        input: "var(--input)",
+        ring: "var(--ring)",
+        success: "var(--success)"
       },
       fontFamily: {
         sans: ["var(--font-dm-sans)", "ui-sans-serif", "system-ui", "sans-serif"],
-        serif: ["var(--font-instrument)", "Georgia", "serif"]
+        serif: ["var(--font-instrument)", "Georgia", "serif"],
+        display: ["var(--font-display)", "Georgia", "serif"]
       },
       boxShadow: {
         card: "0 4px 24px -4px rgba(12, 18, 34, 0.08), 0 12px 48px -12px rgba(12, 18, 34, 0.12)",

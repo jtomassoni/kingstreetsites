@@ -10,3 +10,8 @@ agents/prospector/screenshots/
 **/*.log
 tsconfig.tsbuildinfo
 .vercel
+
+# Arcade local scoreboard
+.data
+
+.env.tools.local
