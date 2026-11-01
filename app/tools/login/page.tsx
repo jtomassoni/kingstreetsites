@@ -1,8 +1,11 @@
 import Link from "next/link";
 import { ToolsLoginForm } from "@/components/tools/tools-login-form";
 import { isEasyLoginEnabled } from "@meals/lib/auth/easy-login";
-import { getToolsAuthUsers } from "@/lib/tools/auth/env-users";
-import { isToolsAuthConfigured } from "@/lib/tools/auth/env-users";
+import {
+  getSignInUsers,
+  isToolsAuthConfigured,
+  isSuperAdmin,
+} from "@/lib/tools/auth/roles";
 import { safeToolsReturnPath } from "@/lib/tools/auth/safe-return";
 
 export const metadata = {
@@ -21,16 +24,18 @@ export default async function ToolsLoginPage({
 
   const errorMessage =
     params.error === "config"
-      ? "Tools login is not configured. Set TOOLS_AUTH_USERS and TOOLS_SESSION_SECRET."
+      ? "Login is not configured. Set SUPER_ADMIN_USERS, APP_USERS, and TOOLS_SESSION_SECRET."
       : params.error === "unauthorized"
         ? "Your account is no longer authorized."
         : null;
 
   const quickUsers =
     configured && isEasyLoginEnabled()
-      ? getToolsAuthUsers().map((u) => ({
+      ? getSignInUsers().map((u) => ({
           email: u.email,
-          label: u.email.split("@")[0] || u.email,
+          label: `${u.email.split("@")[0] || u.email}${
+            isSuperAdmin(u.email) ? " (super admin)" : " (app user)"
+          }`,
         }))
       : [];
 
@@ -48,20 +53,20 @@ export default async function ToolsLoginPage({
       <div className="flex flex-1 items-center justify-center px-6 pb-16">
         <div className="w-full max-w-sm">
           <h1 className="text-center font-serif text-3xl tracking-tight text-ink">
-            Household tools
+            Sign in
           </h1>
           <p className="mt-2 text-center text-sm text-ink-muted">
-            Private access for James and Mary
+            Opens the app dashboard for James and Mary
           </p>
 
           <div className="mt-8 rounded-2xl border border-ink/[0.06] bg-white p-6 shadow-card">
             {!configured ? (
               <p className="text-sm text-ink-muted" role="alert">
-                Tools authentication is not configured. Add{" "}
-                <code className="rounded bg-cream px-1">TOOLS_AUTH_USERS</code>{" "}
-                and{" "}
+                Login is not configured. Add{" "}
+                <code className="rounded bg-cream px-1">SUPER_ADMIN_USERS</code>,{" "}
+                <code className="rounded bg-cream px-1">APP_USERS</code>, and{" "}
                 <code className="rounded bg-cream px-1">TOOLS_SESSION_SECRET</code>{" "}
-                to your environment (see docs/TOOLS.md).
+                (see docs/TOOLS.md).
               </p>
             ) : (
               <ToolsLoginForm

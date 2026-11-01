@@ -1,14 +1,24 @@
 # Household tools
 
-Private dashboard for James and Mary at `/tools`. Separate from the public King Street Sites site and the business CRM at `/admin`.
+Private app dashboard for James and Mary at `/tools`. Separate from the public King Street Sites site.
+
+## Roles
+
+| Role | Env var | Sees |
+|---|---|---|
+| **Super admin** (James) | `SUPER_ADMIN_USERS` | All household apps **and** Business CRM (`/admin`) |
+| **App user** (Mary) | `APP_USERS` | All household apps **except** CRM |
+
+Both sign in at `/tools/login` (or `/login`) and always land on **Choose an app**. CRM is a dashboard card for super admins only; app users hitting `/admin` are sent back to `/tools`.
 
 ## Local setup
 
 1. Copy `.env.example` → `.env.local` (or extend your existing `.env`).
-2. Set tools auth (never commit real values):
+2. Set roles (never commit real values):
 
 ```bash
-TOOLS_AUTH_USERS=james@example.com:password,mary@example.com:password
+SUPER_ADMIN_USERS=james@example.com:password
+APP_USERS=mary@example.com:password
 TOOLS_SESSION_SECRET=$(openssl rand -base64 32)
 ```
 
@@ -23,17 +33,15 @@ DEFAULT_HOUSEHOLD_NAME=JT and Mary
 4. Optional: `OPENAI_API_KEY` for meal AI; Upstash/KV Redis for arcade shared scores.
 5. `npm install && npm run dev` → [http://localhost:3000/tools](http://localhost:3000/tools)
 
-### Auth transition from Meal Planner
+### Auth transition / legacy names
 
-| Meal Planner | Tools (preferred) | Notes |
+| Legacy | Prefer | Notes |
 |---|---|---|
-| `AUTH_USERS` | `TOOLS_AUTH_USERS` | Same `email:password,…` format; `AUTH_USERS` still accepted as fallback |
-| `SESSION_SECRET` | `TOOLS_SESSION_SECRET` | Cookie is now `kss_tools_session` (old `mealplan_session` is not read) |
-| `DATABASE_URL` | `MEALS_DATABASE_URL` | Keeps CRM and meals databases isolated |
+| `TOOLS_AUTH_USERS` / `AUTH_USERS` | `SUPER_ADMIN_USERS` + `APP_USERS` | Still accepted as fallbacks |
+| `CRM_AUTH_USERS` | `SUPER_ADMIN_USERS` | CRM access = super admin |
+| `SESSION_SECRET` | `TOOLS_SESSION_SECRET` | Cookie is `kss_tools_session` |
 
-Sign in again after deploy so sessions use the new cookie. Rotate `TOOLS_SESSION_SECRET` to invalidate all tools sessions. Rotate passwords by editing `TOOLS_AUTH_USERS` — removed users lose access on the next request (allowlist re-checked).
-
-Business admin continues to use `ADMIN_EMAIL` / `ADMIN_PASSWORD` + next-auth. A tools session does **not** unlock `/admin`.
+Rotate `TOOLS_SESSION_SECRET` to invalidate sessions. Remove a user from the role lists to revoke access on the next request.
 
 ## Module structure
 
@@ -43,16 +51,16 @@ app/api/tools/             # Tool APIs (arcade board, …)
 components/tools/          # Shared tools chrome / login UI
 lib/tools/
   registry.ts              # Typed tool registry (cards + nav)
-  auth/                    # Session cookie, allowlist, rate limit
+  auth/                    # Session cookie, roles, rate limit
 modules/meals/             # Meal Planner business logic + UI
 modules/arcade/            # Hold the Lane game
 db/meals/migrations/       # Meal Planner SQL (reference / migrate:meals)
 docs/TOOLS.md              # This file
 ```
 
-Dashboard cards and the tools nav are generated from `lib/tools/registry.ts` only.
+Dashboard cards and the tools nav are generated from `lib/tools/registry.ts` only. The CRM card is added for super admins in the dashboard page.
 
-## Adding a fourth tool
+## Adding another tool
 
 1. Add a module under `modules/<id>/` with the tool’s logic.
 2. Register it in `lib/tools/registry.ts` (`id`, `title`, `description`, `icon`, `href`, `access`, `implemented`).
@@ -67,26 +75,20 @@ No other navigation lists need editing.
 - **CRM** (`DATABASE_URL`): unchanged. Do not run meals migrations against it.
 - **Meals** (`MEALS_DATABASE_URL`): reuse the existing Meal Planner Neon project so household/profile IDs stay valid. Migrations live in `db/meals/migrations/`. Apply with `npm run migrate:meals` only when you intend to migrate that database; the script skips already-applied files and does not reset or seed.
 - **Arcade scores**: local `.data/board.json`, or Upstash/Vercel KV via `UPSTASH_REDIS_*` / `KV_REST_API_*`.
-- **Movie List**: source repo had no app code — `/tools/movies` is an authenticated stub until you implement `modules/movies`.
+- **Movie List**: `/tools/movies` is an authenticated stub until you implement `modules/movies`.
+- **House Projects**: `/tools/projects` is an authenticated stub for a future shared home to-do app (`modules/projects`).
 
-Deploy on the existing Vercel project by adding the new env vars. Keep the Meal Planner and Shoot ’Em Up deployments running until you cut over DNS/bookmarks. Do not delete source project folders or production databases as part of this merge.
-
-### Suggested cutover
-
-1. Merge `tools-integration` after review.
-2. Set env vars on Vercel (tools auth + `MEALS_DATABASE_URL` + optional Redis/OpenAI).
-3. Smoke-test `/tools`, meals flows, arcade, and confirm `/` + `/admin` still work.
-4. Point bookmarks to `/tools/…`; retire standalone Meal Planner / arcade hosts when ready.
+On Vercel set `SUPER_ADMIN_USERS`, `APP_USERS`, `TOOLS_SESSION_SECRET`, and `MEALS_DATABASE_URL`.
 
 ## Rollback
 
-1. Revert or undeploy the `tools-integration` branch on Vercel.
+1. Revert or undeploy the branch on Vercel.
 2. Standalone `mealplanner` and `shootemup` apps/databases remain untouched.
-3. CRM data is unaffected (separate database and next-auth cookies).
+3. CRM data is unaffected (separate database).
 
 ## Limitations
 
-- Movie List has no product implementation yet.
+- Movie List and House Projects are stubs.
 - Login rate limiting is in-memory per server instance.
 - Arcade device-name score claims are unchanged; tools login gates access to the game, not gamertag ownership.
 - Meal photo uploads remain disabled until storage is chosen (same as Meal Planner).

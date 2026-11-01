@@ -95,10 +95,3 @@ export function toolsAuthEmails(
 ): string[] {
   return getToolsAuthUsers(rawOrEnv, env).map((u) => u.email);
 }
-
-/** Fail closed: tools auth is configured only when allowlist + session secret exist. */
-export function isToolsAuthConfigured(env: EnvLike = process.env): boolean {
-  const users = getToolsAuthUsers(env);
-  const secret = env.TOOLS_SESSION_SECRET || env.SESSION_SECRET || "";
-  return users.length > 0 && secret.length >= 16;
-}

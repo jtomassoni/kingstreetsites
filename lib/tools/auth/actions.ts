@@ -4,12 +4,12 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { isEasyLoginEnabled } from "@meals/lib/auth/easy-login";
 import { ensureEnvUserReady } from "@meals/lib/auth/ensure-user";
+import { normalizeEmail } from "@/lib/tools/auth/env-users";
 import {
-  findToolsAuthUser,
-  getToolsAuthUsers,
+  findSignInUser,
+  getSignInUsers,
   isToolsAuthConfigured,
-  normalizeEmail,
-} from "@/lib/tools/auth/env-users";
+} from "@/lib/tools/auth/roles";
 import {
   mealsDatabaseUrl,
   stableToolsUserId,
@@ -79,7 +79,7 @@ export async function toolsLoginAction(
   if (!isToolsAuthConfigured()) {
     return {
       error:
-        "Tools login is not configured. Set TOOLS_AUTH_USERS and TOOLS_SESSION_SECRET.",
+        "Login is not configured. Set SUPER_ADMIN_USERS, APP_USERS, and TOOLS_SESSION_SECRET.",
     };
   }
 
@@ -95,7 +95,7 @@ export async function toolsLoginAction(
     };
   }
 
-  const envUser = findToolsAuthUser(email, password);
+  const envUser = findSignInUser(email, password);
   if (!envUser) {
     recordLoginFailure(key);
     return { error: "Invalid email or password." };
@@ -112,7 +112,7 @@ export async function toolsLoginAction(
   }
 }
 
-/** One-click login for AUTH_USERS entries — local development only. */
+/** One-click login for configured users — local development only. */
 export async function toolsEasyLoginAction(
   _prev: ToolsAuthActionResult,
   formData: FormData,
@@ -123,7 +123,7 @@ export async function toolsEasyLoginAction(
   if (!isToolsAuthConfigured()) {
     return {
       error:
-        "Tools login is not configured. Set TOOLS_AUTH_USERS and TOOLS_SESSION_SECRET.",
+        "Login is not configured. Set SUPER_ADMIN_USERS, APP_USERS, and TOOLS_SESSION_SECRET.",
     };
   }
 
@@ -131,7 +131,7 @@ export async function toolsEasyLoginAction(
   const nextPath = String(formData.get("next") ?? "/tools");
   if (!email) return { error: "Missing user." };
 
-  const user = getToolsAuthUsers().find((u) => u.email === email);
+  const user = getSignInUsers().find((u) => u.email === email);
   if (!user) return { error: "Unknown user." };
 
   try {

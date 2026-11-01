@@ -1,8 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import {
-  isToolsAuthConfigured,
-  toolsAuthEmails,
-} from "@/lib/tools/auth/env-users";
+import { isToolsAuthConfigured, signInEmails } from "@/lib/tools/auth/roles";
 import {
   TOOLS_SESSION_COOKIE,
   verifyToolsSessionToken,
@@ -30,7 +27,8 @@ function requestBase(request: NextRequest): string {
     request.nextUrl.host;
   const proto =
     request.headers.get("x-forwarded-proto") ||
-    (request.nextUrl.protocol.replace(":", "") || "http");
+    request.nextUrl.protocol.replace(":", "") ||
+    "http";
   return `${proto}://${host}`;
 }
 
@@ -47,7 +45,7 @@ function redirectOrActionRedirect(request: NextRequest, url: URL) {
 
 /**
  * Protect /tools/* (except login) and /api/tools/*.
- * Does not touch /admin — business CRM stays on next-auth.
+ * CRM (/admin) is gated separately for super admins only.
  */
 export async function updateToolsSession(request: NextRequest) {
   const path = request.nextUrl.pathname;
@@ -75,7 +73,7 @@ export async function updateToolsSession(request: NextRequest) {
 
   const token = request.cookies.get(TOOLS_SESSION_COOKIE)?.value;
   const user = await verifyToolsSessionToken(token);
-  const allowed = toolsAuthEmails();
+  const allowed = signInEmails();
 
   if (user && allowed.length && !allowed.includes(user.email)) {
     const res = redirectOrActionRedirect(

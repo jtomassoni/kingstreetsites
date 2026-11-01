@@ -3,6 +3,7 @@ import { Inter } from "next/font/google";
 import { redirect } from "next/navigation";
 import AdminNav from "./admin-nav";
 import AdminProviders from "./components/admin-providers";
+import { clearToolsSessionCookie } from "@/lib/tools/auth/session-cookie";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -11,7 +12,7 @@ const inter = Inter({
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const session = await auth();
-  if (!session) redirect("/login");
+  if (!session) redirect("/tools/login");
 
   return (
     <div className={`app-shell min-h-screen ${inter.className}`}>
@@ -25,5 +26,6 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
 async function signOutAction() {
   "use server";
-  await signOut({ redirectTo: "/" });
+  await clearToolsSessionCookie();
+  await signOut({ redirectTo: "/tools/login" });
 }

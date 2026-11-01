@@ -39,6 +39,16 @@ export function ToolIcon({
           <path d="M3 11h18v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z" />
         </svg>
       );
+    case "ListTodo":
+      return (
+        <svg {...props}>
+          <path d="M13 5h8" />
+          <path d="M13 12h8" />
+          <path d="M13 19h8" />
+          <path d="m3 17 2 2 4-4" />
+          <path d="m3 7 2 2 4-4" />
+        </svg>
+      );
     case "Gamepad2":
       return (
         <svg {...props}>

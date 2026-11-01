@@ -37,6 +37,9 @@ export default function AdminNav({
         </div>
 
         <div className="flex shrink-0 items-center gap-4 pb-3">
+          <Link href="/tools" className={crm.btnGhost}>
+            Apps
+          </Link>
           <Link href="/admin/settings" className={crm.tab(settingsActive)}>
             Settings
           </Link>

@@ -39,7 +39,8 @@ const serverSchema = z
       ctx.addIssue({
         code: "custom",
         path: ["AUTH_USERS"],
-        message: "Set TOOLS_AUTH_USERS=email:password,email:password",
+        message:
+          "Set SUPER_ADMIN_USERS and APP_USERS (or legacy TOOLS_AUTH_USERS)",
       });
     }
   });

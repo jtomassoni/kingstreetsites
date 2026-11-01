@@ -1,9 +1,9 @@
-export type ToolId = "meals" | "movies" | "arcade";
+export type ToolId = "meals" | "movies" | "projects" | "arcade";
 
 export type ToolAccess = {
-  /** Must be signed in via tools session (TOOLS_AUTH_USERS). */
+  /** Must be signed in (SUPER_ADMIN_USERS or APP_USERS). */
   requireAuth: true;
-  /** Does not grant King Street Sites business admin (/admin). */
+  /** Household tools never imply CRM; CRM is super-admin only. */
   businessAdmin: false;
 };
 
@@ -12,7 +12,7 @@ export type ToolDefinition = {
   title: string;
   description: string;
   /** Lucide icon name used by the dashboard. */
-  icon: "UtensilsCrossed" | "Clapperboard" | "Gamepad2";
+  icon: "UtensilsCrossed" | "Clapperboard" | "ListTodo" | "Gamepad2";
   href: string;
   access: ToolAccess;
   /** When false, the tool route is a documented stub. */
@@ -35,6 +35,15 @@ export const TOOLS: readonly ToolDefinition[] = [
     description: "Rank and track movies together.",
     icon: "Clapperboard",
     href: "/tools/movies",
+    access: { requireAuth: true, businessAdmin: false },
+    implemented: false,
+  },
+  {
+    id: "projects",
+    title: "House Projects",
+    description: "Shared to-do list for home projects and chores.",
+    icon: "ListTodo",
+    href: "/tools/projects",
     access: { requireAuth: true, businessAdmin: false },
     implemented: false,
   },

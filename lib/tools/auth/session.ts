@@ -1,7 +1,7 @@
 import {
   isToolsAuthConfigured,
-  toolsAuthEmails,
-} from "@/lib/tools/auth/env-users";
+  signInEmails,
+} from "@/lib/tools/auth/roles";
 import {
   clearToolsSessionCookie,
   readToolsSessionUser,
@@ -23,7 +23,7 @@ export type ToolsUser = ToolsSessionUser;
 
 /**
  * Require a valid tools session whose email is still on the allowlist.
- * Does not grant /admin access.
+ * Does not grant /admin unless the user is a super admin (checked separately).
  */
 export async function requireToolsUser(): Promise<ToolsUser> {
   if (!isToolsAuthConfigured()) {
@@ -38,7 +38,7 @@ export async function requireToolsUser(): Promise<ToolsUser> {
     throw new ToolsAuthError("You must be signed in.", "unauthenticated");
   }
 
-  const allowed = toolsAuthEmails();
+  const allowed = signInEmails();
   if (!allowed.includes(user.email)) {
     await clearToolsSessionCookie();
     throw new ToolsAuthError(

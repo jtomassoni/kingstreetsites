@@ -1,11 +1,15 @@
 import { describe, expect, it } from "vitest";
+import { parseAuthUsers } from "@/lib/tools/auth/env-users";
 import {
-  findToolsAuthUser,
-  getToolsAuthUsers,
+  findSignInUser,
+  getAppUsers,
+  getSignInUsers,
+  getSuperAdminUsers,
+  isSuperAdmin,
   isToolsAuthConfigured,
-  parseAuthUsers,
-  toolsAuthEmails,
-} from "@/lib/tools/auth/env-users";
+  roleForEmail,
+  signInEmails,
+} from "@/lib/tools/auth/roles";
 import { safeToolsReturnPath } from "@/lib/tools/auth/safe-return";
 import {
   checkLoginRateLimit,
@@ -13,52 +17,68 @@ import {
   recordLoginFailure,
 } from "@/lib/tools/auth/rate-limit";
 
-describe("tools auth allowlist", () => {
+describe("role-based users", () => {
+  const env = {
+    SUPER_ADMIN_USERS: "james@example.com:secret1",
+    APP_USERS: "mary@example.com:secret2",
+    TOOLS_SESSION_SECRET: "sixteen-chars-ok",
+    ADMIN_EMAIL: "",
+  };
+
   it("parses email:password pairs", () => {
-    const users = parseAuthUsers(
-      "james@example.com:secret1,mary@example.com:secret2",
-    );
-    expect(users).toEqual([
+    expect(parseAuthUsers(env.SUPER_ADMIN_USERS)).toEqual([
       { email: "james@example.com", password: "secret1" },
-      { email: "mary@example.com", password: "secret2" },
     ]);
   });
 
-  it("prefers TOOLS_AUTH_USERS over AUTH_USERS", () => {
-    const env = {
-      TOOLS_AUTH_USERS: "a@example.com:one",
-      AUTH_USERS: "b@example.com:two",
-    };
-    expect(getToolsAuthUsers(env).map((u) => u.email)).toEqual([
-      "a@example.com",
+  it("splits super admin and app user", () => {
+    expect(getSuperAdminUsers(env).map((u) => u.email)).toEqual([
+      "james@example.com",
+    ]);
+    expect(getAppUsers(env).map((u) => u.email)).toEqual(["mary@example.com"]);
+    expect(signInEmails(env).sort()).toEqual([
+      "james@example.com",
+      "mary@example.com",
     ]);
   });
 
-  it("falls back to AUTH_USERS", () => {
-    const env = { AUTH_USERS: "mary@example.com:pw" };
-    expect(toolsAuthEmails(env)).toEqual(["mary@example.com"]);
+  it("gives CRM only to super admin", () => {
+    expect(isSuperAdmin("james@example.com", env)).toBe(true);
+    expect(isSuperAdmin("mary@example.com", env)).toBe(false);
+    expect(roleForEmail("james@example.com", env)).toBe("super_admin");
+    expect(roleForEmail("mary@example.com", env)).toBe("app_user");
   });
 
-  it("validates credentials", () => {
-    const env = { AUTH_USERS: "james@example.com:correct" };
-    expect(findToolsAuthUser("james@example.com", "correct", undefined, env)).toBeTruthy();
-    expect(findToolsAuthUser("james@example.com", "wrong", undefined, env)).toBeNull();
+  it("validates credentials across both lists", () => {
+    expect(findSignInUser("james@example.com", "secret1", env)).toBeTruthy();
+    expect(findSignInUser("mary@example.com", "secret2", env)).toBeTruthy();
+    expect(findSignInUser("mary@example.com", "wrong", env)).toBeNull();
   });
 
   it("fails closed without secret or users", () => {
     expect(isToolsAuthConfigured({})).toBe(false);
     expect(
       isToolsAuthConfigured({
-        AUTH_USERS: "a@b.c:x",
+        APP_USERS: "a@b.c:x",
         TOOLS_SESSION_SECRET: "short",
       }),
     ).toBe(false);
-    expect(
-      isToolsAuthConfigured({
-        AUTH_USERS: "a@b.c:x",
-        TOOLS_SESSION_SECRET: "sixteen-chars-ok",
-      }),
-    ).toBe(true);
+    expect(isToolsAuthConfigured(env)).toBe(true);
+  });
+
+  it("falls back to legacy TOOLS_AUTH_USERS + CRM_AUTH_USERS", () => {
+    const legacy = {
+      TOOLS_AUTH_USERS: "james@example.com:a,mary@example.com:b",
+      CRM_AUTH_USERS: "james@example.com:a",
+      ADMIN_EMAIL: "",
+      TOOLS_SESSION_SECRET: "sixteen-chars-ok",
+    };
+    expect(getSignInUsers(legacy).map((u) => u.email).sort()).toEqual([
+      "james@example.com",
+      "mary@example.com",
+    ]);
+    expect(isSuperAdmin("james@example.com", legacy)).toBe(true);
+    expect(isSuperAdmin("mary@example.com", legacy)).toBe(false);
   });
 });
 
