@@ -32,11 +32,12 @@ export const TOOLS: readonly ToolDefinition[] = [
   {
     id: "movies",
     title: "Movie List",
-    description: "Rank and track movies together.",
+    description:
+      "TV shows we’re watching now — nights and times in Mountain Time.",
     icon: "Clapperboard",
     href: "/tools/movies",
     access: { requireAuth: true, businessAdmin: false },
-    implemented: false,
+    implemented: true,
   },
   {
     id: "projects",

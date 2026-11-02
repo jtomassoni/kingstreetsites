@@ -53,8 +53,9 @@ lib/tools/
   registry.ts              # Typed tool registry (cards + nav)
   auth/                    # Session cookie, roles, rate limit
 modules/meals/             # Meal Planner business logic + UI
+modules/movies/            # Watching schedule (TV shows + MT air times)
 modules/arcade/            # Hold the Lane game
-db/meals/migrations/       # Meal Planner SQL (reference / migrate:meals)
+db/meals/migrations/       # Meal Planner + watching_shows SQL (migrate:meals)
 docs/TOOLS.md              # This file
 ```
 
@@ -75,10 +76,10 @@ No other navigation lists need editing.
 - **CRM** (`DATABASE_URL`): unchanged. Do not run meals migrations against it.
 - **Meals** (`MEALS_DATABASE_URL`): reuse the existing Meal Planner Neon project so household/profile IDs stay valid. Migrations live in `db/meals/migrations/`. Apply with `npm run migrate:meals` only when you intend to migrate that database; the script skips already-applied files and does not reset or seed.
 - **Arcade scores**: local `.data/board.json`, or Upstash/Vercel KV via `UPSTASH_REDIS_*` / `KV_REST_API_*`.
-- **Movie List**: `/tools/movies` is an authenticated stub until you implement `modules/movies`.
+- **Movie List / Watching** (`/tools/movies`): shared “now watching” list with weekly nights/times. Times are always stored and shown in **America/Denver** (Mountain Time). Adding a show pulls the [TVMaze](https://www.tvmaze.com/api) network schedule (e.g. FOX `8/7c` → `6:00 PM` MT). Shows without a next episode are labeled **Not airing** and cannot be added to the week calendar; sync moves saved shows off-calendar between seasons. No AI key required. Tables live on the meals Neon DB (`watching_shows` via migrations `007`/`008`).
 - **House Projects**: `/tools/projects` is an authenticated stub for a future shared home to-do app (`modules/projects`).
 
-On Vercel set `SUPER_ADMIN_USERS`, `APP_USERS`, `TOOLS_SESSION_SECRET`, and `MEALS_DATABASE_URL`.
+On Vercel set `SUPER_ADMIN_USERS`, `APP_USERS`, `TOOLS_SESSION_SECRET`, and `MEALS_DATABASE_URL`. After deploy, run `npm run migrate:meals` if `watching_shows` is not applied yet.
 
 ## Rollback
 
@@ -88,7 +89,8 @@ On Vercel set `SUPER_ADMIN_USERS`, `APP_USERS`, `TOOLS_SESSION_SECRET`, and `MEA
 
 ## Limitations
 
-- Movie List and House Projects are stubs.
+- House Projects is a stub.
+- Watching does not yet track individual episodes or binge/streaming drop dates — weekly air nights only.
 - Login rate limiting is in-memory per server instance.
 - Arcade device-name score claims are unchanged; tools login gates access to the game, not gamertag ownership.
 - Meal photo uploads remain disabled until storage is chosen (same as Meal Planner).
