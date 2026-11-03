@@ -34,6 +34,9 @@
       ],
       "@movies/*": [
         "./modules/movies/*"
+      ],
+      "@projects/*": [
+        "./modules/projects/*"
       ]
     }
   },

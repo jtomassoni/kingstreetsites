@@ -47,11 +47,12 @@ export const TOOLS: readonly ToolDefinition[] = [
     id: "projects",
     title: "House Projects",
     shortTitle: "Projects",
-    description: "Shared to-do list for home projects and chores.",
+    description:
+      "Big home projects with budgets, estimates, actuals, and comments.",
     icon: "ListTodo",
     href: "/tools/projects",
     access: { requireAuth: true, businessAdmin: false },
-    implemented: false,
+    implemented: true,
   },
   {
     id: "arcade",
