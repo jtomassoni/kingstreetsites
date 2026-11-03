@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   calendarDayThisWeek,
+  calendarDaysForShow,
   detectCurrentlyAiring,
   formatWatchingAirLine,
 } from "../../modules/movies/lib/airing";
@@ -154,6 +155,54 @@ describe("formatWatchingAirLine", () => {
         now: monday,
       }),
     ).toBe("Usually Tue · 6:00 PM MST");
+  });
+
+  it("prefers the stream override over the network listing", () => {
+    expect(
+      formatWatchingAirLine({
+        nextAirAt: "2026-11-03T01:00:00+00:00",
+        airDays: ["Monday"],
+        airTimeLocal: "01:00",
+        watchPlatformLabel: "Max",
+        scheduleLocked: true,
+        listedAirDays: ["Monday"],
+        listedAirTimeLocal: "18:00",
+        timezoneLabel: "MST",
+        now: monday,
+      }),
+    ).toBe("Max · Mon · 1:00 AM MST (lists Mon · 6:00 PM MST)");
+  });
+});
+
+describe("calendarDaysForShow", () => {
+  const sundayThisWeek = new Date("2026-11-01T19:00:00Z");
+
+  it("uses stream override nights when locked and listed episode is this week", () => {
+    expect(
+      calendarDaysForShow(
+        {
+          currently_airing: true,
+          next_air_at: "2026-10-30T16:00:00Z",
+          schedule_locked: true,
+          air_days: ["Saturday"],
+        },
+        sundayThisWeek,
+      ),
+    ).toEqual(["Saturday"]);
+  });
+
+  it("falls back to listed next-air day when not locked", () => {
+    expect(
+      calendarDaysForShow(
+        {
+          currently_airing: true,
+          next_air_at: "2026-10-30T16:00:00Z",
+          schedule_locked: false,
+          air_days: ["Saturday"],
+        },
+        sundayThisWeek,
+      ),
+    ).toEqual(["Friday"]);
   });
 });
 

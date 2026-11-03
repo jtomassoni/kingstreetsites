@@ -91,6 +91,30 @@ export function calendarDayThisWeek(
   return local.day;
 }
 
+/**
+ * Days to place a show on this week’s calendar.
+ * Stream overrides win when locked (Max 1am vs network 8/7c), but only if
+ * TVMaze still says a next episode falls in this Mountain week.
+ */
+export function calendarDaysForShow(
+  show: {
+    currently_airing?: boolean;
+    next_air_at?: string | null;
+    schedule_locked?: boolean;
+    air_days?: Weekday[];
+  },
+  now = new Date(),
+): Weekday[] {
+  if (show.currently_airing === false) return [];
+  const listedDay = calendarDayThisWeek(show.next_air_at, now);
+  if (!listedDay) return [];
+
+  if (show.schedule_locked && show.air_days?.length) {
+    return show.air_days.filter((day) => WEEKDAYS.includes(day));
+  }
+  return [listedDay];
+}
+
 function mountainYmd(date: Date): string | null {
   if (Number.isNaN(date.getTime())) return null;
   return new Intl.DateTimeFormat("en-CA", {
@@ -143,21 +167,42 @@ function formatNextAirLabel(
 }
 
 /**
- * Card line for a watching show: prefer the concrete next episode over the
- * recurring "usually Tuesdays" schedule so later airings aren't mistaken for
- * this week's calendar.
+ * Card line: stream override (“Max · Mon · 1:00 AM”) is the point of the app.
+ * Fall back to the concrete TVMaze next-episode stamp when not locked.
  */
 export function formatWatchingAirLine(input: {
   nextAirAt?: string | null;
   airDays?: Weekday[];
   airTimeLocal?: string | null;
+  watchPlatformLabel?: string | null;
+  scheduleLocked?: boolean;
+  listedAirDays?: Weekday[];
+  listedAirTimeLocal?: string | null;
   timezoneLabel?: string;
   now?: Date;
 }): string {
   const tz = input.timezoneLabel || "MT";
   const now = input.now ?? new Date();
-  const stamp = input.nextAirAt;
+  const platform = input.watchPlatformLabel?.trim() || null;
 
+  if (input.scheduleLocked) {
+    const days = input.airDays ?? [];
+    const when = days.length
+      ? `${days.map((d) => d.slice(0, 3)).join(", ")} · ${formatTime12h(input.airTimeLocal)} ${tz}`
+      : `No night set · ${tz}`;
+    const head = platform ? `${platform} · ${when}` : when;
+    const listedDays = input.listedAirDays ?? [];
+    if (
+      listedDays.length ||
+      input.listedAirTimeLocal
+    ) {
+      const listed = `${listedDays.map((d) => d.slice(0, 3)).join(", ") || "—"} · ${formatTime12h(input.listedAirTimeLocal)} ${tz}`;
+      return `${head} (lists ${listed})`;
+    }
+    return head;
+  }
+
+  const stamp = input.nextAirAt;
   if (stamp) {
     const date = new Date(stamp);
     if (!Number.isNaN(date.getTime())) {
@@ -179,20 +224,22 @@ export function formatWatchingAirLine(input: {
       const dayPeriod = get("dayPeriod");
       const time = `${hour}:${minute} ${dayPeriod}`.trim();
       const dated = `${weekday} ${month} ${day} · ${time} ${tz}`;
+      const prefix = platform ? `${platform} · ` : "";
 
       if (calendarDayThisWeek(stamp, now)) {
-        return `This ${dated}`;
+        return `${prefix}This ${dated}`;
       }
       if (date.getTime() < now.getTime()) {
-        return `Last listed ${dated}`;
+        return `${prefix}Last listed ${dated}`;
       }
-      return `Next ${dated}`;
+      return `${prefix}Next ${dated}`;
     }
   }
 
   const days = input.airDays ?? [];
   if (days.length) {
-    return `Usually ${days.map((d) => d.slice(0, 3)).join(", ")} · ${formatTime12h(input.airTimeLocal)} ${tz}`;
+    const when = `Usually ${days.map((d) => d.slice(0, 3)).join(", ")} · ${formatTime12h(input.airTimeLocal)} ${tz}`;
+    return platform ? `${platform} · ${when}` : when;
   }
   return `No weekly night set · ${tz}`;
 }

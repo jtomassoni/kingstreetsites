@@ -3,12 +3,19 @@
 import { revalidatePath } from "next/cache";
 import { requireHouseholdContext } from "@meals/lib/auth/session";
 import {
+  deleteShowStream,
   deleteWatchingShow,
   getWatchingShow,
   insertWatchingShow,
   listWatchingShows,
   updateWatchingShow,
+  upsertShowStream,
 } from "@movies/lib/shows";
+import {
+  isWatchPlatformId,
+  normalizeWatchPlatform,
+  watchPlatformLabel,
+} from "@movies/lib/platforms";
 import { isWeekday, type Weekday } from "@movies/lib/timezone";
 import { lookupTvShow, searchTvShows } from "@movies/lib/tvmaze";
 import type { WatchingShow, WatchingStatus } from "@movies/types";
@@ -48,11 +55,10 @@ export type AddShowInput = {
   imageUrl?: string | null;
   network?: string | null;
   summary?: string | null;
-  /** When false/omitted and tvmazeId is set, schedule is taken from TVMaze → MT. */
-  manualSchedule?: boolean;
-  airDays?: string[];
-  airTimeLocal?: string | null;
-  sourceTimezone?: string | null;
+  /** Required — where you actually watch. */
+  watchPlatform: string;
+  airDays: string[];
+  airTimeLocal: string | null;
   notes?: string | null;
 };
 
@@ -61,6 +67,16 @@ export async function addShowAction(
 ): Promise<{ show?: WatchingShow; error?: string }> {
   const title = input.title.trim();
   if (!title) return { error: "Title is required." };
+  const watchPlatform = normalizeWatchPlatform(input.watchPlatform);
+  if (!watchPlatform || !isWatchPlatformId(watchPlatform)) {
+    return { error: "Pick where you watch this (Max, Disney+, etc.)." };
+  }
+
+  const airDays = (input.airDays ?? []).filter(isWeekday) as Weekday[];
+  const airTimeLocal = input.airTimeLocal ?? null;
+  if (!airDays.length && !airTimeLocal) {
+    return { error: "Set the night/time when it’s actually available to watch." };
+  }
 
   try {
     const { user, householdId } = await requireHouseholdContext();
@@ -78,8 +94,7 @@ export async function addShowAction(
       };
     }
 
-    const useManual = Boolean(input.manualSchedule);
-    const payload = {
+    const show = await insertWatchingShow(householdId, user.id, {
       tvmazeId: fresh.tvmazeId,
       title: title || fresh.title,
       imageUrl: input.imageUrl ?? fresh.imageUrl,
@@ -88,23 +103,15 @@ export async function addShowAction(
       currentlyAiring: true,
       tvStatus: fresh.status,
       nextAirAt: fresh.nextAirAt,
-      airDays: useManual
-        ? ((input.airDays ?? []).filter(isWeekday) as Weekday[])
-        : fresh.mountain.days,
-      airTimeLocal: useManual
-        ? (input.airTimeLocal ?? null)
-        : fresh.mountain.time,
+      airDays,
+      airTimeLocal,
+      listedAirDays: fresh.mountain.days,
+      listedAirTimeLocal: fresh.mountain.time,
+      watchPlatform,
+      scheduleLocked: true,
       sourceTimezone: fresh.source.timezone,
       notes: input.notes ?? null,
-    };
-
-    if (!payload.airDays.length && !payload.airTimeLocal) {
-      return {
-        error: `${fresh.title} is airing but has no weekly night/time to put on the calendar.`,
-      };
-    }
-
-    const show = await insertWatchingShow(householdId, user.id, payload);
+    });
     revalidateMovies();
     return { show };
   } catch (e) {
@@ -132,19 +139,36 @@ export async function syncShowScheduleAction(id: string): Promise<{
     const fresh = await lookupTvShow(existing.tvmaze_id);
     if (!fresh) return { error: "TVMaze has no listing for this show." };
 
+    const listedDays = fresh.mountain.days.length
+      ? fresh.mountain.days
+      : existing.listed_air_days;
+    const listedTime =
+      fresh.mountain.time !== null
+        ? fresh.mountain.time
+        : existing.listed_air_time_local;
+
+    // Stream overrides own the watchable calendar; sync only refreshes listings.
+    const keepOverride = existing.schedule_locked;
+    const airDays = keepOverride
+      ? existing.air_days
+      : fresh.mountain.days.length
+        ? fresh.mountain.days
+        : existing.air_days;
+    const airTimeLocal = keepOverride
+      ? existing.air_time_local
+      : fresh.mountain.time !== null
+        ? fresh.mountain.time
+        : existing.air_time_local;
+
     if (!fresh.currentlyAiring) {
       const show = await updateWatchingShow(householdId, id, {
         currentlyAiring: false,
         tvStatus: fresh.status,
         nextAirAt: null,
-        // Keep typical nights/time for when the season returns, but calendar ignores them.
-        airDays: fresh.mountain.days.length
-          ? fresh.mountain.days
-          : existing.air_days,
-        airTimeLocal:
-          fresh.mountain.time !== null
-            ? fresh.mountain.time
-            : existing.air_time_local,
+        airDays,
+        airTimeLocal,
+        listedAirDays: listedDays,
+        listedAirTimeLocal: listedTime,
         sourceTimezone: fresh.source.timezone,
         network: fresh.network,
         imageUrl: fresh.imageUrl ?? existing.image_url,
@@ -154,8 +178,9 @@ export async function syncShowScheduleAction(id: string): Promise<{
       revalidateMovies();
       return {
         show,
-        label: fresh.airingLabel,
-        error: undefined,
+        label: keepOverride
+          ? `${watchPlatformLabel(existing.watch_platform) ?? "Override"} kept · ${fresh.airingLabel}`
+          : fresh.airingLabel,
       };
     }
 
@@ -163,8 +188,10 @@ export async function syncShowScheduleAction(id: string): Promise<{
       currentlyAiring: true,
       tvStatus: fresh.status,
       nextAirAt: fresh.nextAirAt,
-      airDays: fresh.mountain.days,
-      airTimeLocal: fresh.mountain.time,
+      airDays,
+      airTimeLocal,
+      listedAirDays: listedDays,
+      listedAirTimeLocal: listedTime,
       sourceTimezone: fresh.source.timezone,
       network: fresh.network,
       imageUrl: fresh.imageUrl ?? existing.image_url,
@@ -172,7 +199,12 @@ export async function syncShowScheduleAction(id: string): Promise<{
     });
     if (!show) return { error: "Show not found." };
     revalidateMovies();
-    return { show, label: fresh.mountain.label };
+    return {
+      show,
+      label: keepOverride
+        ? `${watchPlatformLabel(existing.watch_platform) ?? "Override"} kept · lists ${fresh.mountain.label ?? "updated"}`
+        : fresh.mountain.label,
+    };
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Sync failed" };
   }
@@ -182,6 +214,7 @@ export async function syncAllSchedulesAction(): Promise<{
   updated?: number;
   skipped?: number;
   offCalendar?: number;
+  overridesKept?: number;
   error?: string;
 }> {
   try {
@@ -190,6 +223,7 @@ export async function syncAllSchedulesAction(): Promise<{
     let updated = 0;
     let skipped = 0;
     let offCalendar = 0;
+    let overridesKept = 0;
 
     for (const show of shows) {
       if (!show.tvmaze_id) {
@@ -202,18 +236,36 @@ export async function syncAllSchedulesAction(): Promise<{
         continue;
       }
 
+      const listedDays = fresh.mountain.days.length
+        ? fresh.mountain.days
+        : show.listed_air_days;
+      const listedTime =
+        fresh.mountain.time !== null
+          ? fresh.mountain.time
+          : show.listed_air_time_local;
+      const keepOverride = show.schedule_locked;
+      if (keepOverride) overridesKept += 1;
+
+      const airDays = keepOverride
+        ? show.air_days
+        : fresh.mountain.days.length
+          ? fresh.mountain.days
+          : show.air_days;
+      const airTimeLocal = keepOverride
+        ? show.air_time_local
+        : fresh.mountain.time !== null
+          ? fresh.mountain.time
+          : show.air_time_local;
+
       if (!fresh.currentlyAiring) {
         await updateWatchingShow(householdId, show.id, {
           currentlyAiring: false,
           tvStatus: fresh.status,
           nextAirAt: null,
-          airDays: fresh.mountain.days.length
-            ? fresh.mountain.days
-            : show.air_days,
-          airTimeLocal:
-            fresh.mountain.time !== null
-              ? fresh.mountain.time
-              : show.air_time_local,
+          airDays,
+          airTimeLocal,
+          listedAirDays: listedDays,
+          listedAirTimeLocal: listedTime,
           sourceTimezone: fresh.source.timezone,
           network: fresh.network,
           imageUrl: fresh.imageUrl ?? show.image_url,
@@ -228,8 +280,10 @@ export async function syncAllSchedulesAction(): Promise<{
         currentlyAiring: true,
         tvStatus: fresh.status,
         nextAirAt: fresh.nextAirAt,
-        airDays: fresh.mountain.days,
-        airTimeLocal: fresh.mountain.time,
+        airDays,
+        airTimeLocal,
+        listedAirDays: listedDays,
+        listedAirTimeLocal: listedTime,
         sourceTimezone: fresh.source.timezone,
         network: fresh.network,
         imageUrl: fresh.imageUrl ?? show.image_url,
@@ -239,7 +293,7 @@ export async function syncAllSchedulesAction(): Promise<{
     }
 
     revalidateMovies();
-    return { updated, skipped, offCalendar };
+    return { updated, skipped, offCalendar, overridesKept };
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Sync failed" };
   }
@@ -247,11 +301,20 @@ export async function syncAllSchedulesAction(): Promise<{
 
 export async function updateShowScheduleAction(input: {
   id: string;
+  watchPlatform: string;
   airDays: string[];
   airTimeLocal: string | null;
   notes?: string | null;
 }): Promise<{ show?: WatchingShow; error?: string }> {
+  const watchPlatform = normalizeWatchPlatform(input.watchPlatform);
+  if (!watchPlatform) {
+    return { error: "Pick a streaming service." };
+  }
   const airDays = input.airDays.filter(isWeekday) as Weekday[];
+  if (!airDays.length && !input.airTimeLocal) {
+    return { error: "Set when it’s actually available to watch." };
+  }
+
   try {
     const { householdId } = await requireHouseholdContext();
     const existing = await getWatchingShow(householdId, input.id);
@@ -262,9 +325,12 @@ export async function updateShowScheduleAction(input: {
           "This show isn’t airing right now, so it can’t be put on the calendar. Sync later when new episodes are announced.",
       };
     }
-    const show = await updateWatchingShow(householdId, input.id, {
+
+    const show = await upsertShowStream(householdId, input.id, {
+      platform: watchPlatform,
       airDays,
       airTimeLocal: input.airTimeLocal,
+      makePrimary: true,
       notes: input.notes,
     });
     if (!show) return { error: "Show not found." };
@@ -272,6 +338,53 @@ export async function updateShowScheduleAction(input: {
     return { show };
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Update failed" };
+  }
+}
+
+export async function saveShowStreamAction(input: {
+  id: string;
+  platform: string;
+  airDays: string[];
+  airTimeLocal: string | null;
+  makePrimary?: boolean;
+}): Promise<{ show?: WatchingShow; error?: string }> {
+  const platform = normalizeWatchPlatform(input.platform);
+  if (!platform) {
+    return { error: "Pick a streaming service." };
+  }
+  const airDays = input.airDays.filter(isWeekday) as Weekday[];
+  try {
+    const { householdId } = await requireHouseholdContext();
+    const show = await upsertShowStream(householdId, input.id, {
+      platform,
+      airDays,
+      airTimeLocal: input.airTimeLocal,
+      makePrimary: input.makePrimary !== false,
+    });
+    if (!show) return { error: "Show not found." };
+    revalidateMovies();
+    return { show };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Update failed" };
+  }
+}
+
+export async function removeShowStreamAction(input: {
+  id: string;
+  platform: string;
+}): Promise<{ show?: WatchingShow; error?: string }> {
+  try {
+    const { householdId } = await requireHouseholdContext();
+    const show = await deleteShowStream(
+      householdId,
+      input.id,
+      input.platform,
+    );
+    if (!show) return { error: "Show not found." };
+    revalidateMovies();
+    return { show };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Remove failed" };
   }
 }
 
