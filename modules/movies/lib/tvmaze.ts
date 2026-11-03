@@ -280,20 +280,29 @@ export function titleMatchesQuery(showName: string, query: string): boolean {
   return true;
 }
 
-/** Prefer US/English network editions that are actually airing. */
+/** Prefer exact / tight title matches and US editions that are actually airing. */
 function rankHit(hit: TvMazeSearchHit, query: string): number {
   let score = 0;
   const q = normalizeTitle(query);
   const title = normalizeTitle(hit.title);
-  if (title === q) score += 50;
-  else if (titleMatchesQuery(hit.title, query)) score += 40;
+  if (title === q) score += 80;
+  else if (title.startsWith(`${q} `) || title.endsWith(` ${q}`)) score += 55;
+  else if (titleMatchesQuery(hit.title, query)) score += 35;
+  else score -= 40;
   if (hit.countryCode === "US") score += 30;
+  else if (hit.countryCode) score -= 15;
   if (hit.language === "English") score += 10;
-  if (hit.currentlyAiring) score += 25;
+  if (hit.currentlyAiring) score += 40;
+  else score -= 20;
   if (hit.mountain.time) score += 8;
   if (hit.mountain.days.length) score += 4;
   if (hit.status === "Running") score += 3;
   return score;
+}
+
+/** Drop weak combo hits — require a real title relationship to the query. */
+function isRelevantHit(hit: TvMazeSearchHit, query: string): boolean {
+  return titleMatchesQuery(hit.title, query);
 }
 
 async function fetchJson<T>(url: string): Promise<T> {
@@ -340,11 +349,11 @@ type ScheduleRow = {
 };
 
 /**
- * TVMaze text search often misses host-prefixed titles ("Bobby Flay's The Line"
- * won't appear for "The Line"). Scan the US broadcast schedule for phrase matches.
+ * Fallback only: TVMaze text search often misses host-prefixed titles
+ * ("Bobby Flay's The Line" for "The Line"). Scan a short US schedule window.
  */
 async function findShowIdsOnUsSchedule(query: string): Promise<number[]> {
-  const dates = Array.from({ length: 10 }, (_, i) => mountainDateString(i));
+  const dates = Array.from({ length: 7 }, (_, i) => mountainDateString(i));
   const rows = await Promise.all(
     dates.map(async (date) => {
       try {
@@ -367,53 +376,14 @@ async function findShowIdsOnUsSchedule(query: string): Promise<number[]> {
       if (seen.has(show.id)) continue;
       seen.add(show.id);
       ids.push(show.id);
+      if (ids.length >= 6) return ids;
     }
   }
   return ids;
 }
 
-/** If the query includes a person name, pull their cast shows that match the title. */
-async function findShowIdsFromPeople(query: string): Promise<number[]> {
-  const q = query.trim();
-  if (q.split(/\s+/).length < 2) return [];
-
-  try {
-    const people = await fetchJson<
-      Array<{ person: { id: number; name: string } }>
-    >(`https://api.tvmaze.com/search/people?q=${encodeURIComponent(q)}`);
-    const top = people.slice(0, 3);
-    const ids: number[] = [];
-    const seen = new Set<number>();
-
-    await Promise.all(
-      top.map(async ({ person }) => {
-        try {
-          const credits = await fetchJson<
-            Array<{ _embedded?: { show?: RawShow | null } }>
-          >(
-            `https://api.tvmaze.com/people/${person.id}/castcredits?embed=show`,
-          );
-          for (const credit of credits) {
-            const show = credit._embedded?.show;
-            if (!show?.id || !show.name) continue;
-            if (!titleMatchesQuery(show.name, q)) continue;
-            if (seen.has(show.id)) continue;
-            seen.add(show.id);
-            ids.push(show.id);
-          }
-        } catch {
-          // ignore person credit failures
-        }
-      }),
-    );
-    return ids;
-  } catch {
-    return [];
-  }
-}
-
 async function enrichShows(ids: number[]): Promise<TvMazeSearchHit[]> {
-  const unique = [...new Set(ids)].slice(0, 16);
+  const unique = [...new Set(ids)].slice(0, 8);
   const hits = await Promise.all(
     unique.map(async (id) => {
       try {
@@ -427,25 +397,39 @@ async function enrichShows(ids: number[]): Promise<TvMazeSearchHit[]> {
   return hits.filter((h): h is TvMazeSearchHit => Boolean(h));
 }
 
+function finalizeHits(hits: TvMazeSearchHit[], q: string): TvMazeSearchHit[] {
+  const relevant = hits.filter((h) => isRelevantHit(h, q));
+  const ranked = relevant.sort((a, b) => rankHit(b, q) - rankHit(a, q));
+  // Prefer shows you can actually add; keep a couple non-airing only if nothing airs.
+  const airing = ranked.filter((h) => h.currentlyAiring);
+  if (airing.length > 0) return airing.slice(0, 6);
+  return ranked.slice(0, 4);
+}
+
 export async function searchTvShows(query: string): Promise<TvMazeSearchHit[]> {
   const q = query.trim();
   if (q.length < 2) return [];
 
-  const [data, scheduleIds, peopleIds] = await Promise.all([
-    fetchJson<Array<{ show: RawShow; score: number }>>(
-      `https://api.tvmaze.com/search/shows?q=${encodeURIComponent(q)}`,
-    ),
-    findShowIdsOnUsSchedule(q),
-    findShowIdsFromPeople(q),
-  ]);
+  const data = await fetchJson<Array<{ show: RawShow; score: number }>>(
+    `https://api.tvmaze.com/search/shows?q=${encodeURIComponent(q)}`,
+  );
 
-  const primaryIds = data.slice(0, 12).map((row) => row.show.id);
-  const mergedIds = [...primaryIds, ...scheduleIds, ...peopleIds];
-  const enriched = await enrichShows(mergedIds);
+  const primaryIds = data
+    .filter((row) => titleMatchesQuery(row.show.name, q))
+    .slice(0, 8)
+    .map((row) => row.show.id);
 
-  return enriched
-    .sort((a, b) => rankHit(b, q) - rankHit(a, q))
-    .slice(0, 10);
+  let enriched = await enrichShows(primaryIds);
+  let results = finalizeHits(enriched, q);
+
+  // Schedule fallback only when the text search found nothing usable.
+  if (results.length === 0) {
+    const scheduleIds = await findShowIdsOnUsSchedule(q);
+    enriched = await enrichShows(scheduleIds);
+    results = finalizeHits(enriched, q);
+  }
+
+  return results;
 }
 
 export async function lookupTvShow(tvmazeId: number): Promise<TvMazeSearchHit | null> {

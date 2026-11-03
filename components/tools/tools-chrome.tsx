@@ -44,28 +44,32 @@ export function ToolsChrome({
   return (
     <div className="min-h-dvh bg-cream text-ink">
       <header className="border-b border-ink/[0.06] bg-white/80 backdrop-blur">
-        <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-3 px-5 py-4 sm:px-6">
-          <div className="flex min-w-0 items-center gap-3">
+        <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-2 px-3 py-3 sm:gap-3 sm:px-6 sm:py-4">
+          <div className="flex min-w-0 items-center gap-2 sm:gap-3">
             <Link
               href="/tools"
-              className="inline-flex items-center gap-2.5 text-ink"
+              className="inline-flex min-w-0 items-center gap-2 text-ink sm:gap-2.5"
             >
-              <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-ink font-serif text-lg text-brand-light">
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-ink font-serif text-base text-brand-light sm:h-9 sm:w-9 sm:text-lg">
                 K
               </span>
-              <span className="font-semibold tracking-tight">
+              <span className="truncate font-semibold tracking-tight text-sm sm:text-base">
                 King Street Tools
               </span>
             </Link>
           </div>
-          <div className="flex items-center gap-3 text-sm">
-            <span className="text-ink-muted">
-              Signed in as <span className="font-medium text-ink">{label}</span>
+          <div className="flex items-center gap-2 text-xs sm:gap-3 sm:text-sm">
+            <span className="max-w-[7.5rem] truncate font-medium text-ink sm:max-w-none sm:font-normal sm:text-ink-muted">
+              <span className="sm:hidden">{label}</span>
+              <span className="hidden sm:inline">
+                Signed in as{" "}
+                <span className="font-medium text-ink">{label}</span>
+              </span>
             </span>
             <form action={toolsLogoutAction}>
               <button
                 type="submit"
-                className="rounded-lg border border-ink/10 bg-cream px-3 py-1.5 font-medium text-ink hover:border-ink/20"
+                className="rounded-lg border border-ink/10 bg-cream px-2.5 py-1.5 font-medium text-ink hover:border-ink/20 sm:px-3"
               >
                 Log out
               </button>
@@ -73,7 +77,7 @@ export function ToolsChrome({
           </div>
         </div>
         <nav
-          className="mx-auto flex max-w-5xl gap-1 overflow-x-auto px-5 pb-3 sm:px-6"
+          className="mx-auto flex max-w-5xl gap-1 overflow-x-auto px-3 pb-2.5 sm:px-6 sm:pb-3"
           aria-label="Tools"
         >
           <Link
