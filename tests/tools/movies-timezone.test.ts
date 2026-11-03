@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   calendarDayThisWeek,
   detectCurrentlyAiring,
+  formatWatchingAirLine,
 } from "../../modules/movies/lib/airing";
 import {
   convertWallClockTime,
@@ -112,6 +113,47 @@ describe("calendarDayThisWeek", () => {
 
   it("returns null without a next air stamp", () => {
     expect(calendarDayThisWeek(null, sundayThisWeek)).toBeNull();
+  });
+});
+
+describe("formatWatchingAirLine", () => {
+  // Monday Nov 2, 2026 afternoon MT
+  const monday = new Date("2026-11-02T19:00:00Z");
+
+  it("labels a later episode with the concrete next date", () => {
+    // Tue Nov 17 6:00 PM MST
+    const line = formatWatchingAirLine({
+      nextAirAt: "2026-11-18T01:00:00+00:00",
+      airDays: ["Tuesday"],
+      airTimeLocal: "18:00",
+      timezoneLabel: "MST",
+      now: monday,
+    });
+    expect(line).toMatch(/^Next Tue Nov 17 · 6:00 PM MST$/);
+  });
+
+  it("labels an episode in the current week as This …", () => {
+    // Tue Nov 3 6:00 PM MST
+    const line = formatWatchingAirLine({
+      nextAirAt: "2026-11-04T01:00:00+00:00",
+      airDays: ["Tuesday"],
+      airTimeLocal: "18:00",
+      timezoneLabel: "MST",
+      now: monday,
+    });
+    expect(line).toMatch(/^This Tue Nov 3 · 6:00 PM MST$/);
+  });
+
+  it("falls back to the usual schedule without next_air_at", () => {
+    expect(
+      formatWatchingAirLine({
+        nextAirAt: null,
+        airDays: ["Tuesday"],
+        airTimeLocal: "18:00",
+        timezoneLabel: "MST",
+        now: monday,
+      }),
+    ).toBe("Usually Tue · 6:00 PM MST");
   });
 });
 

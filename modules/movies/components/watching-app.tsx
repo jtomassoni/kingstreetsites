@@ -11,7 +11,10 @@ import {
   syncShowScheduleAction,
   updateShowScheduleAction,
 } from "@movies/actions/shows";
-import { calendarDayThisWeek } from "@movies/lib/airing";
+import {
+  calendarDayThisWeek,
+  formatWatchingAirLine,
+} from "@movies/lib/airing";
 import type { TvMazeSearchHit } from "@movies/lib/tvmaze";
 import {
   formatTime12h,
@@ -651,6 +654,16 @@ function ShowRow({
   const [days, setDays] = useState<Weekday[]>(show.air_days);
   const [time, setTime] = useState(show.air_time_local ?? "");
   const airing = show.currently_airing;
+  const onThisWeek = airing && calendarDayThisWeek(show.next_air_at) !== null;
+  const badge = !airing ? "Not airing" : onThisWeek ? "This week" : "Later";
+  const airLine = airing
+    ? formatWatchingAirLine({
+        nextAirAt: show.next_air_at,
+        airDays: show.air_days,
+        airTimeLocal: show.air_time_local,
+        timezoneLabel: tz,
+      })
+    : "Hidden from this week until new episodes are scheduled";
 
   return (
     <li
@@ -679,11 +692,13 @@ function ShowRow({
             <span
               className={`rounded-md px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
                 airing
-                  ? "bg-brand/10 text-brand-dark"
+                  ? onThisWeek
+                    ? "bg-brand/10 text-brand-dark"
+                    : "bg-ink/5 text-ink-muted"
                   : "bg-ink/5 text-ink-muted"
               }`}
             >
-              {airing ? "On calendar" : "Not airing"}
+              {badge}
             </span>
           </div>
           <p className="text-xs text-ink-muted">
@@ -692,11 +707,7 @@ function ShowRow({
               .join(" · ") || " "}
           </p>
           <p className={`mt-1 text-sm ${airing ? "text-brand-dark" : "text-ink-muted"}`}>
-            {airing
-              ? show.air_days.length
-                ? `${show.air_days.map((d) => d.slice(0, 3)).join(", ")} · ${formatTime12h(show.air_time_local)} ${tz}`
-                : `No weekly night set · ${tz}`
-              : "Hidden from this week until new episodes are scheduled"}
+            {airLine}
           </p>
 
           {editing && airing ? (

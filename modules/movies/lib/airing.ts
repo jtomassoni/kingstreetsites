@@ -1,4 +1,5 @@
 import {
+  formatTime12h,
   HOUSEHOLD_TIMEZONE,
   mountainFromAirstamp,
   todayWeekday,
@@ -139,4 +140,59 @@ function formatNextAirLabel(
   }
   if (airdate) return `Airing · next ${airdate}`;
   return "Airing now";
+}
+
+/**
+ * Card line for a watching show: prefer the concrete next episode over the
+ * recurring "usually Tuesdays" schedule so later airings aren't mistaken for
+ * this week's calendar.
+ */
+export function formatWatchingAirLine(input: {
+  nextAirAt?: string | null;
+  airDays?: Weekday[];
+  airTimeLocal?: string | null;
+  timezoneLabel?: string;
+  now?: Date;
+}): string {
+  const tz = input.timezoneLabel || "MT";
+  const now = input.now ?? new Date();
+  const stamp = input.nextAirAt;
+
+  if (stamp) {
+    const date = new Date(stamp);
+    if (!Number.isNaN(date.getTime())) {
+      const parts = new Intl.DateTimeFormat("en-US", {
+        timeZone: HOUSEHOLD_TIMEZONE,
+        weekday: "short",
+        month: "short",
+        day: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+      }).formatToParts(date);
+      const get = (type: Intl.DateTimeFormatPartTypes) =>
+        parts.find((p) => p.type === type)?.value ?? "";
+      const weekday = get("weekday");
+      const month = get("month");
+      const day = get("day");
+      const hour = get("hour");
+      const minute = get("minute");
+      const dayPeriod = get("dayPeriod");
+      const time = `${hour}:${minute} ${dayPeriod}`.trim();
+      const dated = `${weekday} ${month} ${day} · ${time} ${tz}`;
+
+      if (calendarDayThisWeek(stamp, now)) {
+        return `This ${dated}`;
+      }
+      if (date.getTime() < now.getTime()) {
+        return `Last listed ${dated}`;
+      }
+      return `Next ${dated}`;
+    }
+  }
+
+  const days = input.airDays ?? [];
+  if (days.length) {
+    return `Usually ${days.map((d) => d.slice(0, 3)).join(", ")} · ${formatTime12h(input.airTimeLocal)} ${tz}`;
+  }
+  return `No weekly night set · ${tz}`;
 }
