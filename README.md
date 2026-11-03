@@ -34,7 +34,7 @@ Monaghan's is included in the portfolio as an existing reference project but doe
 - Elevate Remodeling (home service demo)
 
 ## Household tools
-Private Meal Planner, Watching (Movie List), and arcade live under `/tools` (see [docs/TOOLS.md](docs/TOOLS.md)). They use a separate env-based session from the business `/admin` login. Watching stores TV schedules in Mountain Time on the meals Neon database.
+Private Meal Planner, Watching (Movie List), House Projects, and arcade live under `/tools` (see [docs/TOOLS.md](docs/TOOLS.md)). They use a separate env-based session from the business `/admin` login. Watching and House Projects share the meals Neon database (Mountain Time TV schedules; project budgets/estimates/actuals in cents).
 
 ## Environment variables
 Create a `.env.local` file with:

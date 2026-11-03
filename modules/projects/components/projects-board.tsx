@@ -12,7 +12,13 @@ import {
 } from "@projects/actions/projects";
 import { BOARD_GROUP_LABELS } from "@projects/lib/board";
 import { CostSummary } from "@projects/components/cost-summary";
+import { MenuSelect } from "@projects/components/menu-select";
 import { BOARD_GROUPS, type BoardGroup, type ProjectListItem } from "@projects/types";
+
+const BOARD_GROUP_OPTIONS = BOARD_GROUPS.map((g) => ({
+  value: g,
+  label: BOARD_GROUP_LABELS[g],
+}));
 
 export function ProjectsBoard({
   initialProjects,
@@ -121,17 +127,13 @@ export function ProjectsBoard({
           className="w-full rounded-xl border border-ink/10 bg-cream px-3.5 py-2.5 text-sm text-ink outline-none ring-brand/30 placeholder:text-ink-faint focus:border-brand/40 focus:ring-2"
         />
         <div className="flex flex-col gap-3 sm:flex-row">
-          <select
+          <MenuSelect
+            aria-label="Board group"
             value={boardGroup}
-            onChange={(e) => setBoardGroup(e.target.value as BoardGroup)}
-            className="min-h-11 rounded-xl border border-ink/10 bg-cream px-3 text-sm text-ink"
-          >
-            {BOARD_GROUPS.map((g) => (
-              <option key={g} value={g}>
-                {BOARD_GROUP_LABELS[g]}
-              </option>
-            ))}
-          </select>
+            options={BOARD_GROUP_OPTIONS}
+            onChange={(v) => setBoardGroup(v as BoardGroup)}
+            className="sm:min-w-[10.5rem]"
+          />
           <input
             value={budget}
             onChange={(e) => setBudget(e.target.value)}
@@ -223,24 +225,19 @@ export function ProjectsBoard({
                           >
                             ↓
                           </button>
-                          <select
+                          <MenuSelect
+                            aria-label={`Move ${p.title}`}
                             value={p.board_group}
                             disabled={pending}
-                            className="min-h-9 rounded-lg border border-ink/10 bg-cream px-2 text-xs text-ink"
-                            onChange={(e) => {
-                              const next = e.target.value as BoardGroup;
+                            options={BOARD_GROUP_OPTIONS}
+                            buttonClassName="flex min-h-9 items-center justify-between gap-1.5 rounded-lg border border-ink/10 bg-cream px-2 text-sm text-ink disabled:opacity-50"
+                            onChange={(next) => {
                               startTransition(async () => {
                                 await moveProjectGroupAction(p.id, next);
                                 refresh();
                               });
                             }}
-                          >
-                            {BOARD_GROUPS.map((g) => (
-                              <option key={g} value={g}>
-                                {BOARD_GROUP_LABELS[g]}
-                              </option>
-                            ))}
-                          </select>
+                          />
                           <button
                             type="button"
                             disabled={pending}

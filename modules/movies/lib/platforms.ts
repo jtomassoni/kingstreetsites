@@ -28,6 +28,37 @@ const LEGACY_PLATFORM_ALIASES: Record<string, WatchPlatformId> = {
   "hbo max": "max",
 };
 
+/**
+ * TVMaze network / webChannel name → primary Watch On id.
+ * Streaming originals resolve to a single subscriber; broadcast stays live-oriented.
+ */
+const NETWORK_TO_PLATFORM: Record<string, WatchPlatformId> = {
+  netflix: "netflix",
+  max: "max",
+  hbo: "max",
+  "hbo max": "max",
+  "disney+": "disney_plus",
+  "disney plus": "disney_plus",
+  disney: "disney_plus",
+  hulu: "disney_plus",
+  "prime video": "prime",
+  "amazon prime video": "prime",
+  amazon: "prime",
+  "amazon instant video": "prime",
+  peacock: "peacock",
+  "paramount+": "paramount_plus",
+  "paramount plus": "paramount_plus",
+  paramount: "paramount_plus",
+  "apple tv+": "apple_tv",
+  "apple tv": "apple_tv",
+};
+
+/**
+ * Broadcast / cable nets are not exclusives — the household may watch live
+ * (YouTube TV / cable) or on a delayed streamer (Max, Disney+, Peacock, …).
+ * We only narrow the picker for known streaming originals.
+ */
+
 const PLATFORM_IDS = new Set<string>(WATCH_PLATFORMS.map((p) => p.id));
 
 export function normalizeWatchPlatform(
@@ -61,4 +92,39 @@ export function watchPlatformShort(
   const normalized = normalizeWatchPlatform(id);
   if (!normalized) return id ?? null;
   return WATCH_PLATFORMS.find((p) => p.id === normalized)?.short ?? normalized;
+}
+
+function normalizeNetworkKey(network: string): string {
+  return network
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ");
+}
+
+/**
+ * Platforms that make sense for a TVMaze network/webChannel.
+ * Exclusives (e.g. Netflix) return that service + Other; broadcast → live options;
+ * unknown → full list.
+ */
+export function suggestedWatchPlatforms(
+  network: string | null | undefined,
+): WatchPlatformId[] {
+  if (!network?.trim()) {
+    return WATCH_PLATFORMS.map((p) => p.id);
+  }
+  const key = normalizeNetworkKey(network);
+  const exclusive = NETWORK_TO_PLATFORM[key];
+  if (exclusive) {
+    return exclusive === "other" ? ["other"] : [exclusive, "other"];
+  }
+  return WATCH_PLATFORMS.map((p) => p.id);
+}
+
+/** Prefer the exclusive streamer when the show only belongs on one service. */
+export function defaultWatchPlatform(
+  network: string | null | undefined,
+): WatchPlatformId | null {
+  const suggested = suggestedWatchPlatforms(network);
+  const exclusive = suggested.filter((id) => id !== "other");
+  return exclusive.length === 1 ? exclusive[0]! : null;
 }

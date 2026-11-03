@@ -47,7 +47,11 @@ export default async function HouseProjectDetailPage({
   );
 
   return (
-    <ToolsChrome email={email} activeHref="/tools/projects">
+    <ToolsChrome
+      email={email}
+      activeHref="/tools/projects"
+      crumbs={[{ label: project.title }]}
+    >
       <ProjectDetailApp
         initialProject={project}
         initialComments={comments}

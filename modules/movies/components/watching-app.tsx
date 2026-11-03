@@ -28,12 +28,15 @@ import {
 } from "@movies/components/platform-logo";
 import {
   WATCH_PLATFORMS,
+  defaultWatchPlatform,
   normalizeWatchPlatform,
+  suggestedWatchPlatforms,
   watchPlatformLabel,
   type WatchPlatformId,
 } from "@movies/lib/platforms";
 import type { TvMazeSearchHit } from "@movies/lib/tvmaze";
 import {
+  detectBrowserTimeZone,
   formatTime12h,
   HOUSEHOLD_TIMEZONE,
   shortTimezoneLabel,
@@ -55,17 +58,25 @@ export function WatchingApp({ initialShows, timezoneLabel }: Props) {
   const [searched, setSearched] = useState(false);
   const [selected, setSelected] = useState<TvMazeSearchHit | null>(null);
   const [platform, setPlatform] = useState<WatchPlatformId | "">("");
-  const [airDays, setAirDays] = useState<Weekday[]>([]);
-  const [airTime, setAirTime] = useState("");
   const [notes, setNotes] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const [searching, startSearch] = useTransition();
+  const [displayTimeZone, setDisplayTimeZone] =
+    useState<string>(HOUSEHOLD_TIMEZONE);
+  const [tz, setTz] = useState(
+    timezoneLabel || shortTimezoneLabel(HOUSEHOLD_TIMEZONE),
+  );
 
-  const today = todayWeekday();
+  const today = todayWeekday(new Date(), displayTimeZone);
   const todayColRef = useRef<HTMLDivElement | null>(null);
-  const tz = timezoneLabel || shortTimezoneLabel(HOUSEHOLD_TIMEZONE);
+
+  useEffect(() => {
+    const browserTz = detectBrowserTimeZone();
+    setDisplayTimeZone(browserTz);
+    setTz(shortTimezoneLabel(browserTz));
+  }, []);
 
   useEffect(() => {
     todayColRef.current?.scrollIntoView({
@@ -74,6 +85,13 @@ export function WatchingApp({ initialShows, timezoneLabel }: Props) {
       behavior: "auto",
     });
   }, [today]);
+
+  const platformChoices = useMemo(() => {
+    const allowed = new Set(
+      suggestedWatchPlatforms(selected?.network ?? null),
+    );
+    return WATCH_PLATFORMS.filter((p) => allowed.has(p.id));
+  }, [selected?.network]);
 
   const listedTvmazeIds = useMemo(
     () =>
@@ -98,7 +116,7 @@ export function WatchingApp({ initialShows, timezoneLabel }: Props) {
       WEEKDAYS.map((d) => [d, [] as WatchingShow[]]),
     ) as Record<Weekday, WatchingShow[]>;
     for (const show of onCalendar) {
-      for (const day of calendarDaysForShow(show)) {
+      for (const day of calendarDaysForShow(show, new Date(), displayTimeZone)) {
         map[day].push(show);
       }
     }
@@ -108,12 +126,15 @@ export function WatchingApp({ initialShows, timezoneLabel }: Props) {
       );
     }
     return map;
-  }, [onCalendar]);
+  }, [onCalendar, displayTimeZone]);
 
   const onToday = byDay[today];
   const onThisWeek = useMemo(
-    () => onCalendar.filter((s) => calendarDaysForShow(s).length > 0),
-    [onCalendar],
+    () =>
+      onCalendar.filter(
+        (s) => calendarDaysForShow(s, new Date(), displayTimeZone).length > 0,
+      ),
+    [onCalendar, displayTimeZone],
   );
 
   function submitSearch(e?: FormEvent) {
@@ -129,7 +150,7 @@ export function WatchingApp({ initialShows, timezoneLabel }: Props) {
       return;
     }
     startSearch(async () => {
-      const res = await searchShowsAction(value);
+      const res = await searchShowsAction(value, displayTimeZone);
       setSearched(true);
       if (res.error) {
         setError(res.error);
@@ -154,9 +175,7 @@ export function WatchingApp({ initialShows, timezoneLabel }: Props) {
       return;
     }
     setSelected(hit);
-    setPlatform("");
-    setAirDays(hit.mountain.days);
-    setAirTime(hit.mountain.time ?? "");
+    setPlatform(defaultWatchPlatform(hit.network) ?? "");
     setNotes("");
     setMessage(null);
     setError(null);
@@ -165,11 +184,7 @@ export function WatchingApp({ initialShows, timezoneLabel }: Props) {
   function addSelected() {
     if (!selected) return;
     if (!platform) {
-      setError("Pick where you actually watch this (Max, Hulu, …).");
-      return;
-    }
-    if (!airDays.length && !airTime) {
-      setError("Set the night/time when it’s available to watch.");
+      setError("Pick where you watch this.");
       return;
     }
     setError(null);
@@ -182,8 +197,7 @@ export function WatchingApp({ initialShows, timezoneLabel }: Props) {
         network: selected.network,
         summary: selected.summary,
         watchPlatform: platform,
-        airDays,
-        airTimeLocal: airTime || null,
+        displayTimeZone,
         notes: notes || null,
       });
       if (res.error) {
@@ -206,8 +220,6 @@ export function WatchingApp({ initialShows, timezoneLabel }: Props) {
         setSearched(false);
         setQuery("");
         setPlatform("");
-        setAirDays([]);
-        setAirTime("");
         setNotes("");
       }
     });
@@ -242,7 +254,9 @@ export function WatchingApp({ initialShows, timezoneLabel }: Props) {
       if (refreshed.shows) setShows(refreshed.shows);
       setMessage(
         `Synced: ${res.updated ?? 0} updated` +
-          (res.overridesKept ? `, ${res.overridesKept} stream times kept` : "") +
+          (res.overridesKept
+            ? `, ${res.overridesKept} services kept`
+            : "") +
           (res.offCalendar ? `, ${res.offCalendar} off calendar` : "") +
           (res.skipped ? `, ${res.skipped} skipped` : "") +
           ".",
@@ -278,18 +292,11 @@ export function WatchingApp({ initialShows, timezoneLabel }: Props) {
     });
   }
 
-  function saveSchedule(
-    show: WatchingShow,
-    nextPlatform: string,
-    days: Weekday[],
-    time: string,
-  ) {
+  function saveSchedule(show: WatchingShow, nextPlatform: string) {
     startTransition(async () => {
       const res = await updateShowScheduleAction({
         id: show.id,
         watchPlatform: nextPlatform,
-        airDays: days,
-        airTimeLocal: time || null,
       });
       if (res.error) {
         setError(res.error);
@@ -312,8 +319,9 @@ export function WatchingApp({ initialShows, timezoneLabel }: Props) {
             What we&apos;re watching
           </h1>
           <p className="mt-2 text-sm text-ink-muted sm:mt-3 sm:text-lg">
-            When it&apos;s actually on Max / Disney+ / etc. · times in{" "}
+            Drop times follow your locale (
             <span className="font-medium text-ink">{tz}</span>
+            ) — pick the service you subscribe to.
           </p>
         </div>
         <button
@@ -573,7 +581,7 @@ export function WatchingApp({ initialShows, timezoneLabel }: Props) {
                               onClick={() => pickHit(hit)}
                               className="min-h-9 rounded-lg bg-brand px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-dark"
                             >
-                              Set watch time
+                              Add
                             </button>
                           ) : (
                             <p className="text-xs text-ink-faint">
@@ -596,9 +604,10 @@ export function WatchingApp({ initialShows, timezoneLabel }: Props) {
                 <div>
                   <p className="font-medium text-ink">{selected.title}</p>
                   <p className="text-xs text-ink-muted">
-                    Network lists{" "}
-                    {selected.mountain.label ?? selected.airingLabel} — set when
-                    you can actually watch.
+                    Drops{" "}
+                    {selected.mountain.label ?? selected.airingLabel}
+                    {selected.network ? ` on ${selected.network}` : ""}. Pick
+                    your service — time follows your locale ({tz}).
                   </p>
                 </div>
 
@@ -607,10 +616,11 @@ export function WatchingApp({ initialShows, timezoneLabel }: Props) {
                     Watch on
                   </legend>
                   <p className="mt-1 text-[11px] text-ink-muted">
-                    Hulu shows go under Disney+ — that&apos;s where we open them.
+                    Only services that fit this show. Hulu titles go under
+                    Disney+.
                   </p>
                   <div className="mt-2 flex flex-wrap gap-1.5">
-                    {WATCH_PLATFORMS.map((p) => (
+                    {platformChoices.map((p) => (
                       <PlatformPickerButton
                         key={p.id}
                         platform={p.id}
@@ -621,49 +631,6 @@ export function WatchingApp({ initialShows, timezoneLabel }: Props) {
                   </div>
                 </fieldset>
 
-                <fieldset>
-                  <legend className="text-xs font-semibold uppercase tracking-wide text-ink-faint">
-                    Available nights ({tz})
-                  </legend>
-                  <div className="mt-2 flex flex-wrap gap-1.5">
-                    {WEEKDAYS.map((day) => {
-                      const on = airDays.includes(day);
-                      return (
-                        <button
-                          key={day}
-                          type="button"
-                          onClick={() =>
-                            setAirDays((prev) =>
-                              prev.includes(day)
-                                ? prev.filter((d) => d !== day)
-                                : [...prev, day],
-                            )
-                          }
-                          className={`min-h-9 rounded-lg px-2.5 py-1.5 text-xs font-medium ${
-                            on
-                              ? "bg-brand text-white"
-                              : "bg-cream text-ink-muted hover:bg-cream-dark"
-                          }`}
-                        >
-                          {day.slice(0, 3)}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </fieldset>
-
-                <label className="block">
-                  <span className="text-xs font-semibold uppercase tracking-wide text-ink-faint">
-                    Available time ({tz})
-                  </span>
-                  <input
-                    type="time"
-                    value={airTime}
-                    onChange={(e) => setAirTime(e.target.value)}
-                    className="mt-2 w-full rounded-xl border border-ink/10 bg-cream px-3.5 py-3 text-base text-ink outline-none focus:border-brand/40 focus:ring-2 focus:ring-brand/30 sm:py-2.5 sm:text-sm"
-                  />
-                </label>
-
                 <label className="block">
                   <span className="text-xs font-semibold uppercase tracking-wide text-ink-faint">
                     Notes
@@ -672,7 +639,7 @@ export function WatchingApp({ initialShows, timezoneLabel }: Props) {
                     type="text"
                     value={notes}
                     onChange={(e) => setNotes(e.target.value)}
-                    placeholder="e.g. drops after East Coast airs"
+                    placeholder="Optional"
                     className="mt-2 w-full rounded-xl border border-ink/10 bg-cream px-3.5 py-3 text-base text-ink outline-none placeholder:text-ink-faint focus:border-brand/40 focus:ring-2 focus:ring-brand/30 sm:py-2.5 sm:text-sm"
                   />
                 </label>
@@ -717,8 +684,8 @@ export function WatchingApp({ initialShows, timezoneLabel }: Props) {
           <ul className="mt-3 space-y-2.5 sm:mt-5 sm:space-y-3">
             {shows.length === 0 ? (
               <li className="rounded-2xl border border-dashed border-ink/10 px-4 py-6 text-center text-sm text-ink-muted">
-                Nothing saved yet — search, pick Max/Disney+/etc., set the real
-                drop time.
+                Nothing saved yet — search a show and pick the service you
+                subscribe to.
               </li>
             ) : (
               shows.map((show) => (
@@ -730,8 +697,8 @@ export function WatchingApp({ initialShows, timezoneLabel }: Props) {
                   onStatus={(status) => markStatus(show.id, status)}
                   onRemove={() => remove(show.id)}
                   onSync={() => syncOne(show.id)}
-                  onSaveSchedule={(nextPlatform, days, time) =>
-                    saveSchedule(show, nextPlatform, days, time)
+                  onSaveSchedule={(nextPlatform) =>
+                    saveSchedule(show, nextPlatform)
                   }
                 />
               ))
@@ -758,21 +725,25 @@ function ShowRow({
   onStatus: (status: WatchingShow["status"]) => void;
   onRemove: () => void;
   onSync: () => void;
-  onSaveSchedule: (
-    platform: string,
-    days: Weekday[],
-    time: string,
-  ) => void;
+  onSaveSchedule: (platform: string) => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [platform, setPlatform] = useState<WatchPlatformId | "">(
     normalizeWatchPlatform(show.watch_platform) ?? "",
   );
-  const [days, setDays] = useState<Weekday[]>(show.air_days);
-  const [time, setTime] = useState(show.air_time_local ?? "");
+  const platformChoices = useMemo(() => {
+    const allowed = new Set(suggestedWatchPlatforms(show.network));
+    const current = normalizeWatchPlatform(show.watch_platform);
+    return WATCH_PLATFORMS.filter(
+      (p) => allowed.has(p.id) || p.id === current,
+    );
+  }, [show.network, show.watch_platform]);
   const airing = show.currently_airing;
-  const onThisWeek = airing && calendarDaysForShow(show).length > 0;
+  const onThisWeek =
+    airing &&
+    calendarDaysForShow(show, new Date(), show.timezone || HOUSEHOLD_TIMEZONE)
+      .length > 0;
   const badge = !airing ? "Not airing" : onThisWeek ? "This week" : "Later";
   const airLine = airing
     ? formatWatchingAirLine({
@@ -844,8 +815,12 @@ function ShowRow({
 
           {editing && airing ? (
             <div className="mt-3 space-y-3">
+              <p className="text-[11px] text-ink-muted">
+                Change where you watch. Drop time stays from the listing (
+                {tz}).
+              </p>
               <div className="flex flex-wrap gap-1.5">
-                {WATCH_PLATFORMS.map((p) => (
+                {platformChoices.map((p) => (
                   <PlatformPickerButton
                     key={p.id}
                     platform={p.id}
@@ -854,49 +829,18 @@ function ShowRow({
                   />
                 ))}
               </div>
-              <div className="flex flex-wrap gap-1.5">
-                {WEEKDAYS.map((day) => {
-                  const on = days.includes(day);
-                  return (
-                    <button
-                      key={day}
-                      type="button"
-                      onClick={() =>
-                        setDays((prev) =>
-                          prev.includes(day)
-                            ? prev.filter((d) => d !== day)
-                            : [...prev, day],
-                        )
-                      }
-                      className={`min-h-10 rounded-lg px-2.5 py-1 text-xs font-medium sm:min-h-9 ${
-                        on
-                          ? "bg-brand text-white"
-                          : "bg-cream text-ink-muted"
-                      }`}
-                    >
-                      {day.slice(0, 3)}
-                    </button>
-                  );
-                })}
-              </div>
-              <input
-                type="time"
-                value={time}
-                onChange={(e) => setTime(e.target.value)}
-                className="w-full rounded-lg border border-ink/10 bg-cream px-2.5 py-2.5 text-base sm:w-auto sm:py-2 sm:text-sm"
-              />
               <div className="flex gap-2">
                 <button
                   type="button"
                   disabled={pending || !platform}
                   onClick={() => {
                     if (!platform) return;
-                    onSaveSchedule(platform, days, time);
+                    onSaveSchedule(platform);
                     setEditing(false);
                   }}
                   className="min-h-10 flex-1 rounded-lg bg-brand px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50 sm:min-h-9 sm:flex-none"
                 >
-                  Save watch time
+                  Save service
                 </button>
                 <button
                   type="button"
@@ -904,8 +848,6 @@ function ShowRow({
                     setPlatform(
                       normalizeWatchPlatform(show.watch_platform) ?? "",
                     );
-                    setDays(show.air_days);
-                    setTime(show.air_time_local ?? "");
                     setEditing(false);
                   }}
                   className="min-h-10 rounded-lg px-3 py-1.5 text-xs text-ink-muted sm:min-h-9"

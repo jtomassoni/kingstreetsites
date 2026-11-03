@@ -55,6 +55,14 @@ describe("movies timezone helpers", () => {
     const local = mountainFromAirstamp("2026-09-17T00:00:00+00:00");
     expect(local).toEqual({ day: "Wednesday", time: "18:00" });
   });
+
+  it("converts airstamp into the viewer's locale timezone", () => {
+    const pacific = mountainFromAirstamp(
+      "2026-09-17T00:00:00+00:00",
+      "America/Los_Angeles",
+    );
+    expect(pacific).toEqual({ day: "Wednesday", time: "17:00" });
+  });
 });
 
 describe("title matching", () => {

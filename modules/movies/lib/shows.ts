@@ -164,6 +164,8 @@ export type UpsertWatchingShowInput = {
   watchPlatform?: string | null;
   scheduleLocked?: boolean;
   sourceTimezone?: string | null;
+  /** IANA zone for air_time_local wall clock (browser locale). */
+  timezone?: string | null;
   notes?: string | null;
 };
 
@@ -224,7 +226,7 @@ export async function insertWatchingShow(
       ${watchPlatform},
       ${scheduleLocked},
       ${input.sourceTimezone ?? null},
-      ${HOUSEHOLD_TIMEZONE},
+      ${input.timezone?.trim() || HOUSEHOLD_TIMEZONE},
       ${input.notes?.trim() || null},
       ${userId}
     )
@@ -309,6 +311,11 @@ export async function updateWatchingShow(
         patch.sourceTimezone !== undefined
           ? patch.sourceTimezone
           : existing.source_timezone
+      },
+      timezone = ${
+        patch.timezone !== undefined
+          ? patch.timezone?.trim() || existing.timezone
+          : existing.timezone
       },
       notes = ${notes}
     WHERE id = ${id} AND household_id = ${householdId}

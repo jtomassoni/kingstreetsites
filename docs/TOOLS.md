@@ -78,7 +78,7 @@ No other navigation lists need editing.
 - **Meals** (`MEALS_DATABASE_URL`): reuse the existing Meal Planner Neon project so household/profile IDs stay valid. Migrations live in `db/meals/migrations/`. Apply with `npm run migrate:meals` only when you intend to migrate that database; the script skips already-applied files and does not reset or seed.
 - **Arcade scores**: local `.data/board.json`, or Upstash/Vercel KV via `UPSTASH_REDIS_*` / `KV_REST_API_*`.
 - **Movie List / Watching** (`/tools/movies`): shared “when can we actually watch” calendar. Times are always stored and shown in **America/Denver** (Mountain Time). Adding a show requires a **streaming service** (Max, Disney+, Netflix, …) plus the real available night/time — network/TVMaze listings (e.g. Food Network `8/7c` → `6:00 PM` MT) are kept as reference only and **sync does not overwrite** stream overrides. Hulu titles are tagged **Disney+** (Disney Bundle / Hulu-in-Disney+). Shows without a next episode are labeled **Not airing** and drop off the week calendar. No AI key required. Tables live on the meals Neon DB (`watching_shows` + `watching_show_streams` via migrations `007`–`009`).
-- **House Projects** (`/tools/projects`): shared board for big home projects (not chores). Board groups are **Backlog / Planned / In progress / Blocked / Done** with manual priority within each group. Projects have an optional budget; line items carry estimate + actual (cents). Comments work on projects, sub-projects, and line items. Tables live on the meals Neon DB (`house_projects`, `house_sub_projects`, `house_line_items`, `house_project_comments` via migration `010`).
+- **House Projects** (`/tools/projects`): shared board for big home projects (not chores). Hierarchy is **project → sub-project → line item**. Board groups are **Backlog / Planned / In progress / Blocked / Done** with manual priority within each group; archive soft-hides a project without deleting it. Projects have an optional budget; line items carry estimate + actual (integer cents) and optional assignee (`james` | `mary`). Comments work on projects, sub-projects, and line items. No AI key required. Tables live on the meals Neon DB (`house_projects`, `house_sub_projects`, `house_line_items`, `house_project_comments` via migration `010`).
 
 On Vercel set `SUPER_ADMIN_USERS`, `APP_USERS`, `TOOLS_SESSION_SECRET`, and `MEALS_DATABASE_URL`. After deploy, run `npm run migrate:meals` if meals/watching/house-projects migrations are not applied yet.
 
@@ -91,6 +91,7 @@ On Vercel set `SUPER_ADMIN_USERS`, `APP_USERS`, `TOOLS_SESSION_SECRET`, and `MEA
 ## Limitations
 
 - Watching stream overrides are weekly night/time per service (not per-episode absolute drop timestamps).
+- House Projects v1 has no photos/receipts, due dates, or notifications; assignees are line-item only.
 - Login rate limiting is in-memory per server instance.
 - Arcade device-name score claims are unchanged; tools login gates access to the game, not gamertag ownership.
 - Meal photo uploads remain disabled until storage is chosen (same as Meal Planner).

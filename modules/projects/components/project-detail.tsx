@@ -22,6 +22,7 @@ import { BOARD_GROUP_LABELS } from "@projects/lib/board";
 import { centsToInputValue, formatCents } from "@projects/lib/money";
 import { CommentThread } from "@projects/components/comment-thread";
 import { CostSummary } from "@projects/components/cost-summary";
+import { MenuSelect } from "@projects/components/menu-select";
 import {
   ASSIGNEES,
   BOARD_GROUPS,
@@ -31,6 +32,27 @@ import {
   type ProjectDetail,
   type WorkStatus,
 } from "@projects/types";
+
+const BOARD_GROUP_OPTIONS = BOARD_GROUPS.map((g) => ({
+  value: g,
+  label: BOARD_GROUP_LABELS[g],
+}));
+
+const WORK_STATUS_OPTIONS = WORK_STATUSES.map((s) => ({
+  value: s,
+  label: s,
+}));
+
+const ASSIGNEE_OPTIONS = [
+  { value: "", label: "Unassigned" },
+  ...ASSIGNEES.map((a) => ({ value: a, label: assigneeLabel(a) })),
+];
+
+const compactSelectBtn =
+  "flex min-h-9 items-center justify-between gap-1.5 rounded-lg border border-ink/10 bg-cream px-2 text-sm text-ink disabled:opacity-50";
+
+const microSelectBtn =
+  "flex min-h-8 items-center justify-between gap-1 rounded-md border border-ink/10 bg-white px-2 text-sm text-ink disabled:opacity-50";
 
 type Props = {
   initialProject: ProjectDetail;
@@ -97,24 +119,19 @@ export function ProjectDetailApp({
 
       <header className="space-y-3">
         <div className="flex flex-wrap items-center gap-2">
-          <select
+          <MenuSelect
+            aria-label="Board group"
             value={project.board_group}
             disabled={pending}
-            className="min-h-9 rounded-lg border border-ink/10 bg-cream px-2 text-xs text-ink"
-            onChange={(e) => {
-              const next = e.target.value as BoardGroup;
+            options={BOARD_GROUP_OPTIONS}
+            buttonClassName={compactSelectBtn}
+            onChange={(next) => {
               startTransition(async () => {
                 await moveProjectGroupAction(project.id, next);
                 refresh();
               });
             }}
-          >
-            {BOARD_GROUPS.map((g) => (
-              <option key={g} value={g}>
-                {BOARD_GROUP_LABELS[g]}
-              </option>
-            ))}
-          </select>
+          />
           {project.archived ? (
             <span className="rounded-full bg-ink/5 px-2 py-0.5 text-[11px] text-ink-muted">
               Archived
@@ -303,27 +320,23 @@ export function ProjectDetailApp({
                   </p>
                 </div>
                 <div className="flex flex-wrap items-center gap-1.5">
-                  <select
+                  <MenuSelect
+                    aria-label={`${sp.title} status`}
                     value={sp.status}
                     disabled={pending}
-                    className="min-h-9 rounded-lg border border-ink/10 bg-cream px-2 text-xs"
-                    onChange={(e) => {
+                    options={WORK_STATUS_OPTIONS}
+                    buttonClassName={compactSelectBtn}
+                    onChange={(status) => {
                       startTransition(async () => {
                         await updateSubProjectAction({
                           projectId: project.id,
                           subProjectId: sp.id,
-                          status: e.target.value,
+                          status,
                         });
                         refresh();
                       });
                     }}
-                  >
-                    {WORK_STATUSES.map((s) => (
-                      <option key={s} value={s}>
-                        {s}
-                      </option>
-                    ))}
-                  </select>
+                  />
                   <button
                     type="button"
                     disabled={pending || spIndex === 0}
@@ -396,47 +409,38 @@ export function ProjectDetailApp({
                         }}
                         className="min-w-[10rem] flex-1 border-0 bg-transparent text-sm font-medium text-ink outline-none"
                       />
-                      <select
+                      <MenuSelect
+                        aria-label={`${li.title} status`}
                         value={li.status}
-                        className="min-h-8 rounded-md border border-ink/10 bg-white px-1.5 text-[11px]"
-                        onChange={(e) => {
+                        options={WORK_STATUS_OPTIONS}
+                        buttonClassName={microSelectBtn}
+                        onChange={(status) => {
                           startTransition(async () => {
                             await updateLineItemAction({
                               projectId: project.id,
                               lineItemId: li.id,
-                              status: e.target.value as WorkStatus,
+                              status: status as WorkStatus,
                             });
                             refresh();
                           });
                         }}
-                      >
-                        {WORK_STATUSES.map((s) => (
-                          <option key={s} value={s}>
-                            {s}
-                          </option>
-                        ))}
-                      </select>
-                      <select
+                      />
+                      <MenuSelect
+                        aria-label={`${li.title} assignee`}
                         value={li.assignee ?? ""}
-                        className="min-h-8 rounded-md border border-ink/10 bg-white px-1.5 text-[11px]"
-                        onChange={(e) => {
+                        options={ASSIGNEE_OPTIONS}
+                        buttonClassName={microSelectBtn}
+                        onChange={(assignee) => {
                           startTransition(async () => {
                             await updateLineItemAction({
                               projectId: project.id,
                               lineItemId: li.id,
-                              assignee: e.target.value || null,
+                              assignee: assignee || null,
                             });
                             refresh();
                           });
                         }}
-                      >
-                        <option value="">Unassigned</option>
-                        {ASSIGNEES.map((a) => (
-                          <option key={a} value={a}>
-                            {assigneeLabel(a)}
-                          </option>
-                        ))}
-                      </select>
+                      />
                       <label className="flex items-center gap-1 text-[11px] text-ink-muted">
                         Est
                         <input
@@ -654,18 +658,14 @@ function AddLineItemForm({
         placeholder="Act $"
         className="min-h-10 w-24 rounded-xl border border-ink/10 bg-cream px-3 text-sm"
       />
-      <select
+      <MenuSelect
+        aria-label="Assignee"
         value={assignee}
-        onChange={(e) => setAssignee(e.target.value)}
-        className="min-h-10 rounded-xl border border-ink/10 bg-cream px-2 text-sm"
-      >
-        <option value="">Unassigned</option>
-        {ASSIGNEES.map((a) => (
-          <option key={a} value={a}>
-            {assigneeLabel(a)}
-          </option>
-        ))}
-      </select>
+        options={ASSIGNEE_OPTIONS}
+        onChange={setAssignee}
+        className="min-w-[8.5rem]"
+        buttonClassName="flex min-h-10 w-full items-center justify-between gap-2 rounded-xl border border-ink/10 bg-cream px-2 text-sm text-ink"
+      />
       <button
         type="submit"
         disabled={pending || !title.trim()}

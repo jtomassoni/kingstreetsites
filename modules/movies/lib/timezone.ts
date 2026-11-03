@@ -1,8 +1,38 @@
-/** Household always watches in Mountain Time. */
+/**
+ * Default when the browser locale is unknown (home base).
+ * Display/conversion prefer the viewer's IANA zone so travel updates times.
+ */
 export const HOUSEHOLD_TIMEZONE = "America/Denver" as const;
 
 /** US networks publish Eastern; "8/7c" means this zone. */
 export const US_EASTERN_TIMEZONE = "America/New_York" as const;
+
+/** Best-effort browser IANA zone; falls back to household default. */
+export function detectBrowserTimeZone(): string {
+  try {
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    if (tz && typeof tz === "string") return tz;
+  } catch {
+    /* ignore */
+  }
+  return HOUSEHOLD_TIMEZONE;
+}
+
+export function isValidTimeZone(timeZone: string | null | undefined): boolean {
+  if (!timeZone?.trim()) return false;
+  try {
+    Intl.DateTimeFormat("en-US", { timeZone: timeZone.trim() }).format(new Date());
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function resolveDisplayTimeZone(
+  timeZone: string | null | undefined,
+): string {
+  return isValidTimeZone(timeZone) ? timeZone!.trim() : HOUSEHOLD_TIMEZONE;
+}
 
 export const WEEKDAYS = [
   "Monday",
@@ -88,22 +118,26 @@ export function convertWallClockTime(
   return `${String(hourNum).padStart(2, "0")}:${m.padStart(2, "0")}`;
 }
 
-/** Instant (TVMaze airstamp) → weekday + wall clock in Mountain Time. */
-export function mountainFromAirstamp(airstamp: string): {
+/** Instant (TVMaze airstamp) → weekday + wall clock in a display timezone. */
+export function mountainFromAirstamp(
+  airstamp: string,
+  timeZone: string = HOUSEHOLD_TIMEZONE,
+): {
   day: Weekday;
   time: string;
 } | null {
   const date = new Date(airstamp);
   if (Number.isNaN(date.getTime())) return null;
+  const tz = resolveDisplayTimeZone(timeZone);
 
   const dayName = new Intl.DateTimeFormat("en-US", {
-    timeZone: HOUSEHOLD_TIMEZONE,
+    timeZone: tz,
     weekday: "long",
   }).format(date);
   if (!isWeekday(dayName)) return null;
 
   const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone: HOUSEHOLD_TIMEZONE,
+    timeZone: tz,
     hour: "2-digit",
     minute: "2-digit",
     hourCycle: "h23",
@@ -186,10 +220,13 @@ export function shortTimezoneLabel(timeZone: string = HOUSEHOLD_TIMEZONE): strin
   }
 }
 
-/** Today's weekday name in household timezone. */
-export function todayWeekday(now = new Date()): Weekday {
+/** Today's weekday name in the given timezone (defaults to household). */
+export function todayWeekday(
+  now = new Date(),
+  timeZone: string = HOUSEHOLD_TIMEZONE,
+): Weekday {
   const name = new Intl.DateTimeFormat("en-US", {
-    timeZone: HOUSEHOLD_TIMEZONE,
+    timeZone: resolveDisplayTimeZone(timeZone),
     weekday: "long",
   }).format(now);
   return isWeekday(name) ? name : "Monday";

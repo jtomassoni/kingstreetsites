@@ -28,7 +28,6 @@ import {
 } from "@projects/lib/sub-projects";
 import {
   ASSIGNEES,
-  BOARD_GROUPS,
   WORK_STATUSES,
   type Assignee,
   type BoardGroup,
@@ -481,5 +480,3 @@ export async function deleteCommentAction(
     };
   }
 }
-
-export { BOARD_GROUPS };

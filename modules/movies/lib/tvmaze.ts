@@ -7,6 +7,8 @@ import {
   isWeekday,
   mountainFromAirstamp,
   normalizeTimeHHMM,
+  resolveDisplayTimeZone,
+  shortTimezoneLabel,
   US_EASTERN_TIMEZONE,
   type Weekday,
 } from "@movies/lib/timezone";
@@ -36,7 +38,10 @@ export type TvMazeSearchHit = {
     timezone: string | null;
     listingLabel: string | null;
   };
-  /** Converted to America/Denver for the household. */
+  /**
+   * Converted to the viewer's display timezone (browser locale; usually Mountain at home).
+   * Field name kept for compatibility with existing call sites.
+   */
   mountain: {
     days: Weekday[];
     time: string | null;
@@ -99,24 +104,31 @@ function countryCode(show: RawShow): string | null {
   );
 }
 
-function mountainLabel(days: Weekday[], time: string | null): string | null {
+function localScheduleLabel(
+  days: Weekday[],
+  time: string | null,
+  displayTimeZone: string,
+): string | null {
   if (!days.length && !time) return null;
   const dayPart = days.length
     ? days.map((d) => d.slice(0, 3)).join(", ")
     : "No fixed night";
-  return `${dayPart} · ${formatTime12h(time)} MT`;
+  const tz = shortTimezoneLabel(displayTimeZone);
+  return `${dayPart} · ${formatTime12h(time)} ${tz}`;
 }
 
 /**
- * Resolve weekly Mountain schedule.
- * 1) Official show.schedule + network TZ (handles FOX "8/7c" → 6pm MT)
+ * Resolve weekly schedule in the viewer's timezone.
+ * 1) Official show.schedule + network TZ (handles FOX "8/7c" → local)
  * 2) Next/previous episode airstamp
  * 3) Recent episode airstamps
  */
 export function resolveMountainSchedule(
   show: RawShow,
   recentEpisodes: RawEpisode[] = [],
+  displayTimeZone: string = HOUSEHOLD_TIMEZONE,
 ): Pick<TvMazeSearchHit, "source" | "mountain" | "scheduleSource"> {
+  const displayTz = resolveDisplayTimeZone(displayTimeZone);
   const sourceTz =
     channelTimezone(show) ||
     (countryCode(show) === "US" ? US_EASTERN_TIMEZONE : null);
@@ -124,10 +136,10 @@ export function resolveMountainSchedule(
   const scheduleTime = normalizeTimeHHMM(show.schedule?.time ?? null);
 
   if (scheduleTime && sourceTz) {
-    const mountainTime = convertWallClockTime(
+    const localTime = convertWallClockTime(
       scheduleTime,
       sourceTz,
-      HOUSEHOLD_TIMEZONE,
+      displayTz,
     );
     return {
       source: {
@@ -138,8 +150,8 @@ export function resolveMountainSchedule(
       },
       mountain: {
         days: scheduleDays,
-        time: mountainTime,
-        label: mountainLabel(scheduleDays, mountainTime),
+        time: localTime,
+        label: localScheduleLabel(scheduleDays, localTime, displayTz),
       },
       scheduleSource: "show_schedule",
     };
@@ -152,7 +164,7 @@ export function resolveMountainSchedule(
   ].filter((s): s is string => Boolean(s));
 
   for (const stamp of candidateStamps) {
-    const local = mountainFromAirstamp(stamp);
+    const local = mountainFromAirstamp(stamp, displayTz);
     if (!local) continue;
 
     const days = scheduleDays.length ? scheduleDays : [local.day];
@@ -173,7 +185,7 @@ export function resolveMountainSchedule(
       mountain: {
         days,
         time: local.time,
-        label: mountainLabel(days, local.time),
+        label: localScheduleLabel(days, local.time, displayTz),
       },
       scheduleSource: recentEpisodes.some((e) => e.airstamp === stamp)
         ? "recent_episodes"
@@ -192,7 +204,7 @@ export function resolveMountainSchedule(
       mountain: {
         days: scheduleDays,
         time: null,
-        label: mountainLabel(scheduleDays, null),
+        label: localScheduleLabel(scheduleDays, null, displayTz),
       },
       scheduleSource: "show_schedule",
     };
@@ -213,8 +225,9 @@ export function resolveMountainSchedule(
 export function mapTvMazeShow(
   show: RawShow,
   recentEpisodes: RawEpisode[] = [],
+  displayTimeZone: string = HOUSEHOLD_TIMEZONE,
 ): TvMazeSearchHit {
-  const resolved = resolveMountainSchedule(show, recentEpisodes);
+  const resolved = resolveMountainSchedule(show, recentEpisodes, displayTimeZone);
   const airing = detectCurrentlyAiring({
     status: show.status,
     nextEpisode: show._embedded?.nextepisode ?? null,
@@ -382,13 +395,16 @@ async function findShowIdsOnUsSchedule(query: string): Promise<number[]> {
   return ids;
 }
 
-async function enrichShows(ids: number[]): Promise<TvMazeSearchHit[]> {
+async function enrichShows(
+  ids: number[],
+  displayTimeZone: string = HOUSEHOLD_TIMEZONE,
+): Promise<TvMazeSearchHit[]> {
   const unique = [...new Set(ids)].slice(0, 8);
   const hits = await Promise.all(
     unique.map(async (id) => {
       try {
         const detail = await fetchShowWithEpisodes(id);
-        return detail ? mapTvMazeShow(detail) : null;
+        return detail ? mapTvMazeShow(detail, [], displayTimeZone) : null;
       } catch {
         return null;
       }
@@ -406,9 +422,13 @@ function finalizeHits(hits: TvMazeSearchHit[], q: string): TvMazeSearchHit[] {
   return ranked.slice(0, 4);
 }
 
-export async function searchTvShows(query: string): Promise<TvMazeSearchHit[]> {
+export async function searchTvShows(
+  query: string,
+  displayTimeZone: string = HOUSEHOLD_TIMEZONE,
+): Promise<TvMazeSearchHit[]> {
   const q = query.trim();
   if (q.length < 2) return [];
+  const tz = resolveDisplayTimeZone(displayTimeZone);
 
   const data = await fetchJson<Array<{ show: RawShow; score: number }>>(
     `https://api.tvmaze.com/search/shows?q=${encodeURIComponent(q)}`,
@@ -419,22 +439,26 @@ export async function searchTvShows(query: string): Promise<TvMazeSearchHit[]> {
     .slice(0, 8)
     .map((row) => row.show.id);
 
-  let enriched = await enrichShows(primaryIds);
+  let enriched = await enrichShows(primaryIds, tz);
   let results = finalizeHits(enriched, q);
 
   // Schedule fallback only when the text search found nothing usable.
   if (results.length === 0) {
     const scheduleIds = await findShowIdsOnUsSchedule(q);
-    enriched = await enrichShows(scheduleIds);
+    enriched = await enrichShows(scheduleIds, tz);
     results = finalizeHits(enriched, q);
   }
 
   return results;
 }
 
-export async function lookupTvShow(tvmazeId: number): Promise<TvMazeSearchHit | null> {
+export async function lookupTvShow(
+  tvmazeId: number,
+  displayTimeZone: string = HOUSEHOLD_TIMEZONE,
+): Promise<TvMazeSearchHit | null> {
   const show = await fetchShowWithEpisodes(tvmazeId);
   if (!show) return null;
+  const tz = resolveDisplayTimeZone(displayTimeZone);
 
   let recent: RawEpisode[] = [];
   const hasScheduleTime = Boolean(normalizeTimeHHMM(show.schedule?.time ?? null));
@@ -449,5 +473,5 @@ export async function lookupTvShow(tvmazeId: number): Promise<TvMazeSearchHit | 
     }
   }
 
-  return mapTvMazeShow(show, recent);
+  return mapTvMazeShow(show, recent, tz);
 }

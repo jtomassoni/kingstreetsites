@@ -14,9 +14,14 @@ import {
 import {
   isWatchPlatformId,
   normalizeWatchPlatform,
+  suggestedWatchPlatforms,
   watchPlatformLabel,
 } from "@movies/lib/platforms";
-import { isWeekday, type Weekday } from "@movies/lib/timezone";
+import {
+  isWeekday,
+  resolveDisplayTimeZone,
+  type Weekday,
+} from "@movies/lib/timezone";
 import { lookupTvShow, searchTvShows } from "@movies/lib/tvmaze";
 import type { WatchingShow, WatchingStatus } from "@movies/types";
 
@@ -24,13 +29,19 @@ function revalidateMovies() {
   revalidatePath("/tools/movies");
 }
 
-export async function searchShowsAction(query: string): Promise<{
+export async function searchShowsAction(
+  query: string,
+  displayTimeZone?: string | null,
+): Promise<{
   results?: Awaited<ReturnType<typeof searchTvShows>>;
   error?: string;
 }> {
   await requireHouseholdContext();
   try {
-    const results = await searchTvShows(query);
+    const results = await searchTvShows(
+      query,
+      resolveDisplayTimeZone(displayTimeZone),
+    );
     return { results };
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Search failed" };
@@ -57,8 +68,11 @@ export type AddShowInput = {
   summary?: string | null;
   /** Required — where you actually watch. */
   watchPlatform: string;
-  airDays: string[];
-  airTimeLocal: string | null;
+  /** Optional overrides; default is TVMaze schedule in displayTimeZone. */
+  airDays?: string[];
+  airTimeLocal?: string | null;
+  /** Browser/locale IANA zone for local drop times. */
+  displayTimeZone?: string | null;
   notes?: string | null;
 };
 
@@ -72,11 +86,7 @@ export async function addShowAction(
     return { error: "Pick where you watch this (Max, Disney+, etc.)." };
   }
 
-  const airDays = (input.airDays ?? []).filter(isWeekday) as Weekday[];
-  const airTimeLocal = input.airTimeLocal ?? null;
-  if (!airDays.length && !airTimeLocal) {
-    return { error: "Set the night/time when it’s actually available to watch." };
-  }
+  const displayTz = resolveDisplayTimeZone(input.displayTimeZone);
 
   try {
     const { user, householdId } = await requireHouseholdContext();
@@ -85,12 +95,33 @@ export async function addShowAction(
       return { error: "Pick a show from search so we can check if it’s airing." };
     }
 
-    const fresh = await lookupTvShow(input.tvmazeId);
+    const fresh = await lookupTvShow(input.tvmazeId, displayTz);
     if (!fresh) return { error: "Could not load that show from TVMaze." };
 
     if (!fresh.currentlyAiring) {
       return {
         error: `${fresh.title} isn’t airing right now (${fresh.airingLabel}). It can’t be added to the calendar.`,
+      };
+    }
+
+    const allowed = suggestedWatchPlatforms(fresh.network);
+    if (!allowed.includes(watchPlatform)) {
+      return {
+        error: `${fresh.title} isn’t available on that service — pick one that fits.`,
+      };
+    }
+
+    const overrideDays = (input.airDays ?? []).filter(isWeekday) as Weekday[];
+    const overrideTime = input.airTimeLocal ?? null;
+    const airDays =
+      overrideDays.length > 0 ? overrideDays : fresh.mountain.days;
+    const airTimeLocal =
+      overrideTime ||
+      (overrideDays.length > 0 ? null : fresh.mountain.time);
+    if (!airDays.length && !airTimeLocal) {
+      return {
+        error:
+          "TVMaze doesn’t list a night/time for this show yet — try Sync later.",
       };
     }
 
@@ -110,6 +141,7 @@ export async function addShowAction(
       watchPlatform,
       scheduleLocked: true,
       sourceTimezone: fresh.source.timezone,
+      timezone: displayTz,
       notes: input.notes ?? null,
     });
     revalidateMovies();
@@ -136,7 +168,8 @@ export async function syncShowScheduleAction(id: string): Promise<{
       return { error: "This show has no TVMaze link to sync from." };
     }
 
-    const fresh = await lookupTvShow(existing.tvmaze_id);
+    const displayTz = resolveDisplayTimeZone(existing.timezone);
+    const fresh = await lookupTvShow(existing.tvmaze_id, displayTz);
     if (!fresh) return { error: "TVMaze has no listing for this show." };
 
     const listedDays = fresh.mountain.days.length
@@ -147,18 +180,17 @@ export async function syncShowScheduleAction(id: string): Promise<{
         ? fresh.mountain.time
         : existing.listed_air_time_local;
 
-    // Stream overrides own the watchable calendar; sync only refreshes listings.
-    const keepOverride = existing.schedule_locked;
-    const airDays = keepOverride
-      ? existing.air_days
-      : fresh.mountain.days.length
-        ? fresh.mountain.days
-        : existing.air_days;
-    const airTimeLocal = keepOverride
-      ? existing.air_time_local
-      : fresh.mountain.time !== null
+    // Platform (subscriber) is the override; nights/times always follow TVMaze in locale TZ.
+    const airDays = fresh.mountain.days.length
+      ? fresh.mountain.days
+      : existing.air_days;
+    const airTimeLocal =
+      fresh.mountain.time !== null
         ? fresh.mountain.time
         : existing.air_time_local;
+    const keepPlatform = Boolean(
+      existing.schedule_locked && existing.watch_platform,
+    );
 
     if (!fresh.currentlyAiring) {
       const show = await updateWatchingShow(householdId, id, {
@@ -170,6 +202,7 @@ export async function syncShowScheduleAction(id: string): Promise<{
         listedAirDays: listedDays,
         listedAirTimeLocal: listedTime,
         sourceTimezone: fresh.source.timezone,
+        timezone: displayTz,
         network: fresh.network,
         imageUrl: fresh.imageUrl ?? existing.image_url,
         summary: fresh.summary ?? existing.summary,
@@ -178,8 +211,8 @@ export async function syncShowScheduleAction(id: string): Promise<{
       revalidateMovies();
       return {
         show,
-        label: keepOverride
-          ? `${watchPlatformLabel(existing.watch_platform) ?? "Override"} kept · ${fresh.airingLabel}`
+        label: keepPlatform
+          ? `${watchPlatformLabel(existing.watch_platform) ?? "Watch"} · ${fresh.airingLabel}`
           : fresh.airingLabel,
       };
     }
@@ -193,6 +226,7 @@ export async function syncShowScheduleAction(id: string): Promise<{
       listedAirDays: listedDays,
       listedAirTimeLocal: listedTime,
       sourceTimezone: fresh.source.timezone,
+      timezone: displayTz,
       network: fresh.network,
       imageUrl: fresh.imageUrl ?? existing.image_url,
       summary: fresh.summary ?? existing.summary,
@@ -201,8 +235,8 @@ export async function syncShowScheduleAction(id: string): Promise<{
     revalidateMovies();
     return {
       show,
-      label: keepOverride
-        ? `${watchPlatformLabel(existing.watch_platform) ?? "Override"} kept · lists ${fresh.mountain.label ?? "updated"}`
+      label: keepPlatform
+        ? `${watchPlatformLabel(existing.watch_platform) ?? "Watch"} · ${fresh.mountain.label ?? "updated"}`
         : fresh.mountain.label,
     };
   } catch (e) {
@@ -230,7 +264,8 @@ export async function syncAllSchedulesAction(): Promise<{
         skipped += 1;
         continue;
       }
-      const fresh = await lookupTvShow(show.tvmaze_id);
+      const displayTz = resolveDisplayTimeZone(show.timezone);
+      const fresh = await lookupTvShow(show.tvmaze_id, displayTz);
       if (!fresh) {
         skipped += 1;
         continue;
@@ -243,17 +278,13 @@ export async function syncAllSchedulesAction(): Promise<{
         fresh.mountain.time !== null
           ? fresh.mountain.time
           : show.listed_air_time_local;
-      const keepOverride = show.schedule_locked;
-      if (keepOverride) overridesKept += 1;
+      if (show.schedule_locked && show.watch_platform) overridesKept += 1;
 
-      const airDays = keepOverride
-        ? show.air_days
-        : fresh.mountain.days.length
-          ? fresh.mountain.days
-          : show.air_days;
-      const airTimeLocal = keepOverride
-        ? show.air_time_local
-        : fresh.mountain.time !== null
+      const airDays = fresh.mountain.days.length
+        ? fresh.mountain.days
+        : show.air_days;
+      const airTimeLocal =
+        fresh.mountain.time !== null
           ? fresh.mountain.time
           : show.air_time_local;
 
@@ -267,6 +298,7 @@ export async function syncAllSchedulesAction(): Promise<{
           listedAirDays: listedDays,
           listedAirTimeLocal: listedTime,
           sourceTimezone: fresh.source.timezone,
+          timezone: displayTz,
           network: fresh.network,
           imageUrl: fresh.imageUrl ?? show.image_url,
           summary: fresh.summary ?? show.summary,
@@ -285,6 +317,7 @@ export async function syncAllSchedulesAction(): Promise<{
         listedAirDays: listedDays,
         listedAirTimeLocal: listedTime,
         sourceTimezone: fresh.source.timezone,
+        timezone: displayTz,
         network: fresh.network,
         imageUrl: fresh.imageUrl ?? show.image_url,
         summary: fresh.summary ?? show.summary,
@@ -302,17 +335,14 @@ export async function syncAllSchedulesAction(): Promise<{
 export async function updateShowScheduleAction(input: {
   id: string;
   watchPlatform: string;
-  airDays: string[];
-  airTimeLocal: string | null;
+  /** Optional — omit to keep the listed drop night/time. */
+  airDays?: string[];
+  airTimeLocal?: string | null;
   notes?: string | null;
 }): Promise<{ show?: WatchingShow; error?: string }> {
   const watchPlatform = normalizeWatchPlatform(input.watchPlatform);
   if (!watchPlatform) {
     return { error: "Pick a streaming service." };
-  }
-  const airDays = input.airDays.filter(isWeekday) as Weekday[];
-  if (!airDays.length && !input.airTimeLocal) {
-    return { error: "Set when it’s actually available to watch." };
   }
 
   try {
@@ -326,10 +356,29 @@ export async function updateShowScheduleAction(input: {
       };
     }
 
+    const allowed = suggestedWatchPlatforms(existing.network);
+    if (!allowed.includes(watchPlatform)) {
+      return {
+        error: `${existing.title} isn’t available on that service — pick one that fits.`,
+      };
+    }
+
+    const airDays =
+      input.airDays !== undefined
+        ? (input.airDays.filter(isWeekday) as Weekday[])
+        : existing.air_days;
+    const airTimeLocal =
+      input.airTimeLocal !== undefined
+        ? input.airTimeLocal
+        : existing.air_time_local;
+    if (!airDays.length && !airTimeLocal) {
+      return { error: "No drop night/time on file for this show yet." };
+    }
+
     const show = await upsertShowStream(householdId, input.id, {
       platform: watchPlatform,
       airDays,
-      airTimeLocal: input.airTimeLocal,
+      airTimeLocal,
       makePrimary: true,
       notes: input.notes,
     });

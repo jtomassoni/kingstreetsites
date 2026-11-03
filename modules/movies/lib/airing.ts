@@ -78,23 +78,24 @@ export function detectCurrentlyAiring(input: {
 export function calendarDayThisWeek(
   nextAirAt: string | null | undefined,
   now = new Date(),
+  timeZone: string = HOUSEHOLD_TIMEZONE,
 ): Weekday | null {
   if (!nextAirAt) return null;
-  const local = mountainFromAirstamp(nextAirAt);
+  const local = mountainFromAirstamp(nextAirAt, timeZone);
   if (!local) return null;
 
-  const airYmd = mountainYmd(new Date(nextAirAt));
+  const airYmd = localYmd(new Date(nextAirAt), timeZone);
   if (!airYmd) return null;
 
-  const { startYmd, endYmd } = mountainWeekYmdBounds(now);
+  const { startYmd, endYmd } = localWeekYmdBounds(now, timeZone);
   if (airYmd < startYmd || airYmd > endYmd) return null;
   return local.day;
 }
 
 /**
  * Days to place a show on this week’s calendar.
- * Stream overrides win when locked (Max 1am vs network 8/7c), but only if
- * TVMaze still says a next episode falls in this Mountain week.
+ * Locked rows keep their watch nights, but only when the next episode falls
+ * in the current Mon–Sun week in the viewer's timezone.
  */
 export function calendarDaysForShow(
   show: {
@@ -104,9 +105,10 @@ export function calendarDaysForShow(
     air_days?: Weekday[];
   },
   now = new Date(),
+  timeZone: string = HOUSEHOLD_TIMEZONE,
 ): Weekday[] {
   if (show.currently_airing === false) return [];
-  const listedDay = calendarDayThisWeek(show.next_air_at, now);
+  const listedDay = calendarDayThisWeek(show.next_air_at, now, timeZone);
   if (!listedDay) return [];
 
   if (show.schedule_locked && show.air_days?.length) {
@@ -115,22 +117,28 @@ export function calendarDaysForShow(
   return [listedDay];
 }
 
-function mountainYmd(date: Date): string | null {
+function localYmd(date: Date, timeZone: string): string | null {
   if (Number.isNaN(date.getTime())) return null;
   return new Intl.DateTimeFormat("en-CA", {
-    timeZone: HOUSEHOLD_TIMEZONE,
+    timeZone,
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
   }).format(date);
 }
 
-function mountainWeekYmdBounds(now: Date): { startYmd: string; endYmd: string } {
-  const todayYmd = mountainYmd(now);
+function localWeekYmdBounds(
+  now: Date,
+  timeZone: string,
+): { startYmd: string; endYmd: string } {
+  const todayYmd = localYmd(now, timeZone);
   if (!todayYmd) {
     return { startYmd: "9999-99-99", endYmd: "0000-00-00" };
   }
-  const startYmd = addDaysToYmd(todayYmd, -WEEKDAY_INDEX[todayWeekday(now)]);
+  const startYmd = addDaysToYmd(
+    todayYmd,
+    -WEEKDAY_INDEX[todayWeekday(now, timeZone)],
+  );
   return { startYmd, endYmd: addDaysToYmd(startYmd, 6) };
 }
 
