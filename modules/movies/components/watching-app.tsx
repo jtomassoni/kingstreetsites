@@ -1,6 +1,13 @@
 "use client";
 
-import { useMemo, useState, useTransition, type FormEvent } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useTransition,
+  type FormEvent,
+} from "react";
 import {
   addShowAction,
   listShowsAction,
@@ -47,7 +54,16 @@ export function WatchingApp({ initialShows, timezoneLabel }: Props) {
   const [searching, startSearch] = useTransition();
 
   const today = todayWeekday();
+  const todayColRef = useRef<HTMLDivElement | null>(null);
   const tz = timezoneLabel || shortTimezoneLabel(HOUSEHOLD_TIMEZONE);
+
+  useEffect(() => {
+    todayColRef.current?.scrollIntoView({
+      inline: "center",
+      block: "nearest",
+      behavior: "auto",
+    });
+  }, [today]);
   const listedTvmazeIds = useMemo(
     () =>
       new Set(
@@ -86,6 +102,8 @@ export function WatchingApp({ initialShows, timezoneLabel }: Props) {
     }
     return map;
   }, [onThisWeek]);
+
+  const onToday = byDay[today];
 
   function submitSearch(e?: FormEvent) {
     e?.preventDefault();
@@ -306,26 +324,77 @@ export function WatchingApp({ initialShows, timezoneLabel }: Props) {
         </div>
       )}
 
+      {onToday.length > 0 ? (
+        <section className="mt-6 sm:mt-10">
+          <div className="flex items-baseline justify-between gap-3">
+            <h2 className="font-serif text-xl tracking-tight text-ink sm:text-2xl">
+              On today
+            </h2>
+            <p className="shrink-0 text-xs text-ink-muted sm:text-sm">
+              {today.slice(0, 3)} · {tz}
+            </p>
+          </div>
+          <ul className="mt-3 grid gap-2.5 sm:grid-cols-2 sm:gap-3">
+            {onToday.map((show) => (
+              <li key={`today-${show.id}`}>
+                <div className="flex gap-3 rounded-2xl border border-brand/30 bg-brand/[0.07] p-3 shadow-sm sm:gap-4 sm:p-4">
+                  {show.image_url ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={show.image_url}
+                      alt=""
+                      className="h-[5.5rem] w-[3.9rem] shrink-0 rounded-lg object-cover sm:h-28 sm:w-20"
+                    />
+                  ) : (
+                    <span className="flex h-[5.5rem] w-[3.9rem] shrink-0 items-center justify-center rounded-lg bg-cream-dark text-xs text-ink-faint sm:h-28 sm:w-20">
+                      TV
+                    </span>
+                  )}
+                  <div className="min-w-0 flex-1 self-center">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-brand-dark">
+                      Airs today
+                    </p>
+                    <p className="mt-1 font-serif text-xl leading-snug tracking-tight text-ink sm:text-2xl">
+                      {show.title}
+                    </p>
+                    <p className="mt-1.5 text-sm font-medium text-brand-dark">
+                      {formatTime12h(show.air_time_local)} {tz}
+                    </p>
+                    {show.network ? (
+                      <p className="mt-0.5 text-xs text-ink-muted">
+                        {show.network}
+                      </p>
+                    ) : null}
+                  </div>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+
       <section className="mt-7 sm:mt-10">
         <div className="flex items-baseline justify-between gap-3">
           <h2 className="font-serif text-xl tracking-tight text-ink sm:text-2xl">
             This week
           </h2>
           <p className="shrink-0 text-xs text-ink-muted sm:text-sm">
-            {today.slice(0, 3)} · {tz}
+            {onToday.length === 0 ? `${today.slice(0, 3)} · ` : ""}
+            {tz}
             {offCalendar.length > 0 ? ` · ${offCalendar.length} hidden` : ""}
           </p>
         </div>
 
         {/* Mobile: snap-scroll strip. Desktop: 7-col grid. */}
-        <div className="-mx-3 mt-3 flex snap-x snap-mandatory gap-2 overflow-x-auto px-3 pb-1 sm:mx-0 sm:mt-4 sm:grid sm:grid-cols-7 sm:gap-3 sm:overflow-visible sm:px-0 sm:pb-0">
+        <div className="-mx-3 mt-3 flex snap-x snap-mandatory gap-2 overflow-x-auto overscroll-x-contain px-3 pb-1 [-ms-overflow-style:none] [scrollbar-width:none] sm:mx-0 sm:mt-4 sm:grid sm:grid-cols-7 sm:gap-3 sm:overflow-visible sm:px-0 sm:pb-0 sm:[-ms-overflow-style:auto] sm:[scrollbar-width:auto] [&::-webkit-scrollbar]:hidden sm:[&::-webkit-scrollbar]:block">
           {WEEKDAYS.map((day) => {
             const items = byDay[day];
             const isToday = day === today;
             return (
               <div
                 key={day}
-                className={`w-[42%] shrink-0 snap-start rounded-2xl border p-2.5 sm:w-auto sm:min-h-[8.5rem] sm:p-3 ${
+                ref={isToday ? todayColRef : undefined}
+                className={`w-[30%] min-w-[5.25rem] max-w-[7rem] shrink-0 snap-center rounded-2xl border p-2 sm:w-auto sm:min-w-0 sm:max-w-none sm:min-h-[8.5rem] sm:snap-align-none sm:p-3 ${
                   isToday
                     ? "border-brand/35 bg-brand/[0.06] shadow-sm"
                     : "border-ink/[0.06] bg-white"
@@ -673,6 +742,7 @@ function ShowRow({
   onSaveSchedule: (days: Weekday[], time: string) => void;
 }) {
   const [editing, setEditing] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   const [days, setDays] = useState<Weekday[]>(show.air_days);
   const [time, setTime] = useState(show.air_time_local ?? "");
   const airing = show.currently_airing;
@@ -688,7 +758,7 @@ function ShowRow({
     : "Hidden until new episodes are scheduled";
 
   const btn =
-    "min-h-9 rounded-lg border border-ink/10 px-2.5 py-1.5 text-xs font-medium text-ink-muted hover:bg-cream disabled:opacity-50";
+    "min-h-10 flex-1 rounded-lg border border-ink/10 px-2.5 py-1.5 text-xs font-medium text-ink-muted hover:bg-cream disabled:opacity-50 sm:min-h-9 sm:flex-none";
 
   return (
     <li
@@ -755,7 +825,7 @@ function ShowRow({
                             : [...prev, day],
                         )
                       }
-                      className={`min-h-9 rounded-lg px-2 py-1 text-xs font-medium ${
+                      className={`min-h-10 rounded-lg px-2.5 py-1 text-xs font-medium sm:min-h-9 ${
                         on
                           ? "bg-brand text-white"
                           : "bg-cream text-ink-muted"
@@ -770,7 +840,7 @@ function ShowRow({
                 type="time"
                 value={time}
                 onChange={(e) => setTime(e.target.value)}
-                className="w-full rounded-lg border border-ink/10 bg-cream px-2.5 py-2 text-base sm:w-auto sm:text-sm"
+                className="w-full rounded-lg border border-ink/10 bg-cream px-2.5 py-2.5 text-base sm:w-auto sm:py-2 sm:text-sm"
               />
               <div className="flex gap-2">
                 <button
@@ -780,7 +850,7 @@ function ShowRow({
                     onSaveSchedule(days, time);
                     setEditing(false);
                   }}
-                  className="min-h-9 rounded-lg bg-brand px-3 py-1.5 text-xs font-semibold text-white"
+                  className="min-h-10 flex-1 rounded-lg bg-brand px-3 py-1.5 text-xs font-semibold text-white sm:min-h-9 sm:flex-none"
                 >
                   Save
                 </button>
@@ -791,57 +861,95 @@ function ShowRow({
                     setTime(show.air_time_local ?? "");
                     setEditing(false);
                   }}
-                  className="min-h-9 rounded-lg px-3 py-1.5 text-xs text-ink-muted"
+                  className="min-h-10 rounded-lg px-3 py-1.5 text-xs text-ink-muted sm:min-h-9"
                 >
                   Cancel
                 </button>
               </div>
             </div>
           ) : (
-            <div className="mt-2.5 flex flex-wrap gap-1.5 sm:mt-3 sm:gap-2">
-              {show.tvmaze_id ? (
+            <div className="mt-2.5 space-y-1.5 sm:mt-3">
+              <div className="flex gap-1.5 sm:flex-wrap sm:gap-2">
+                {show.tvmaze_id ? (
+                  <button
+                    type="button"
+                    disabled={pending}
+                    onClick={onSync}
+                    className="min-h-10 flex-1 rounded-lg border border-brand/20 bg-brand/5 px-2.5 py-1.5 text-xs font-medium text-brand-dark hover:bg-brand/10 sm:min-h-9 sm:flex-none"
+                  >
+                    Sync
+                  </button>
+                ) : null}
+                {airing ? (
+                  <button
+                    type="button"
+                    onClick={() => setEditing(true)}
+                    className={btn}
+                  >
+                    Edit
+                  </button>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={() => setMenuOpen((v) => !v)}
+                  className={`${btn} sm:hidden`}
+                  aria-expanded={menuOpen}
+                >
+                  {menuOpen ? "Less" : "More"}
+                </button>
                 <button
                   type="button"
                   disabled={pending}
-                  onClick={onSync}
-                  className="min-h-9 rounded-lg border border-brand/20 bg-brand/5 px-2.5 py-1.5 text-xs font-medium text-brand-dark hover:bg-brand/10"
+                  onClick={() => onStatus("paused")}
+                  className={`${btn} hidden sm:inline-flex`}
                 >
-                  Sync
+                  Pause
                 </button>
-              ) : null}
-              {airing ? (
                 <button
                   type="button"
-                  onClick={() => setEditing(true)}
-                  className={btn}
+                  disabled={pending}
+                  onClick={() => onStatus("finished")}
+                  className={`${btn} hidden sm:inline-flex`}
                 >
-                  Edit
+                  Done
                 </button>
+                <button
+                  type="button"
+                  disabled={pending}
+                  onClick={onRemove}
+                  className="hidden min-h-9 rounded-lg px-2.5 py-1.5 text-xs font-medium text-accent-rose hover:bg-accent-rose/5 sm:inline-flex"
+                >
+                  Remove
+                </button>
+              </div>
+              {menuOpen ? (
+                <div className="flex gap-1.5 sm:hidden">
+                  <button
+                    type="button"
+                    disabled={pending}
+                    onClick={() => onStatus("paused")}
+                    className={btn}
+                  >
+                    Pause
+                  </button>
+                  <button
+                    type="button"
+                    disabled={pending}
+                    onClick={() => onStatus("finished")}
+                    className={btn}
+                  >
+                    Done
+                  </button>
+                  <button
+                    type="button"
+                    disabled={pending}
+                    onClick={onRemove}
+                    className="min-h-10 flex-1 rounded-lg px-2.5 py-1.5 text-xs font-medium text-accent-rose hover:bg-accent-rose/5"
+                  >
+                    Remove
+                  </button>
+                </div>
               ) : null}
-              <button
-                type="button"
-                disabled={pending}
-                onClick={() => onStatus("paused")}
-                className={btn}
-              >
-                Pause
-              </button>
-              <button
-                type="button"
-                disabled={pending}
-                onClick={() => onStatus("finished")}
-                className={btn}
-              >
-                Done
-              </button>
-              <button
-                type="button"
-                disabled={pending}
-                onClick={onRemove}
-                className="min-h-9 rounded-lg px-2.5 py-1.5 text-xs font-medium text-accent-rose hover:bg-accent-rose/5"
-              >
-                Remove
-              </button>
             </div>
           )}
         </div>

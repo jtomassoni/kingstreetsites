@@ -10,6 +10,8 @@ export type ToolAccess = {
 export type ToolDefinition = {
   id: ToolId;
   title: string;
+  /** Short label for mobile tab bars. */
+  shortTitle: string;
   description: string;
   /** Lucide icon name used by the dashboard. */
   icon: "UtensilsCrossed" | "Clapperboard" | "ListTodo" | "Gamepad2";
@@ -23,6 +25,7 @@ export const TOOLS: readonly ToolDefinition[] = [
   {
     id: "meals",
     title: "Meal Planner",
+    shortTitle: "Meals",
     description: "Shared weekly plans, recipes, and grocery lists for the household.",
     icon: "UtensilsCrossed",
     href: "/tools/meals",
@@ -32,6 +35,7 @@ export const TOOLS: readonly ToolDefinition[] = [
   {
     id: "movies",
     title: "Movie List",
+    shortTitle: "Movies",
     description:
       "TV shows we’re watching now — nights and times in Mountain Time.",
     icon: "Clapperboard",
@@ -42,6 +46,7 @@ export const TOOLS: readonly ToolDefinition[] = [
   {
     id: "projects",
     title: "House Projects",
+    shortTitle: "Projects",
     description: "Shared to-do list for home projects and chores.",
     icon: "ListTodo",
     href: "/tools/projects",
@@ -51,6 +56,7 @@ export const TOOLS: readonly ToolDefinition[] = [
   {
     id: "arcade",
     title: "Shoot ’Em Up",
+    shortTitle: "Arcade",
     description: "Hold the Lane — a portrait shooter for quick rounds.",
     icon: "Gamepad2",
     href: "/tools/arcade",
@@ -69,6 +75,8 @@ export function toolsNavItems() {
   return TOOLS.map((t) => ({
     id: t.id,
     title: t.title,
+    shortTitle: t.shortTitle,
+    icon: t.icon,
     href: t.href,
     implemented: t.implemented,
   }));

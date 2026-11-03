@@ -16,29 +16,21 @@ export default async function HouseProjectsToolPage() {
 
   return (
     <ToolsChrome email={user.email} activeHref="/tools/projects">
-      <main className="mx-auto max-w-2xl px-5 py-12 sm:px-6">
-        <p className="text-sm font-medium uppercase tracking-[0.14em] text-brand">
+      <main className="mx-auto max-w-2xl px-3 py-8 sm:px-6 sm:py-12">
+        <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-brand sm:text-sm">
           House Projects
         </p>
-        <h1 className="mt-2 font-serif text-4xl tracking-tight text-ink">
+        <h1 className="mt-1 font-serif text-[1.85rem] tracking-tight text-ink sm:mt-2 sm:text-4xl">
           Coming soon
         </h1>
-        <p className="mt-4 text-ink-muted leading-relaxed">
+        <p className="mt-3 text-sm leading-relaxed text-ink-muted sm:mt-4 sm:text-base">
           Shared to-dos for home projects and chores. This route is authenticated
-          and registered in the tool registry; the app itself is not built yet.
+          and registered; the app itself is not built yet.
         </p>
-        <p className="mt-4 text-sm text-ink-muted">
-          When you build it, add modules under{" "}
-          <code className="rounded bg-white px-1">modules/projects</code>, APIs
-          under{" "}
-          <code className="rounded bg-white px-1">app/api/tools/projects</code>,
-          and replace this page. See{" "}
-          <code className="rounded bg-white px-1">docs/TOOLS.md</code>.
-        </p>
-        <p className="mt-8">
+        <p className="mt-6 sm:mt-8">
           <Link
             href="/tools"
-            className="font-semibold text-brand hover:text-brand-dark"
+            className="inline-flex min-h-11 items-center font-semibold text-brand hover:text-brand-dark"
           >
             ← Back to tools
           </Link>

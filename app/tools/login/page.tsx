@@ -40,26 +40,28 @@ export default async function ToolsLoginPage({
       : [];
 
   return (
-    <main className="flex min-h-screen flex-col bg-cream">
-      <header className="section py-6">
+    <main className="flex min-h-dvh flex-col bg-cream">
+      <header className="px-4 pb-4 pt-[max(1rem,env(safe-area-inset-top))] sm:px-6 sm:py-6">
         <Link href="/" className="inline-flex items-center gap-2.5 text-ink">
-          <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-ink font-serif text-lg text-brand-light">
+          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-ink font-serif text-base text-brand-light sm:h-9 sm:w-9 sm:text-lg">
             K
           </span>
-          <span className="font-semibold tracking-tight">King Street Sites</span>
+          <span className="font-semibold tracking-tight text-sm sm:text-base">
+            King Street Sites
+          </span>
         </Link>
       </header>
 
-      <div className="flex flex-1 items-center justify-center px-6 pb-16">
+      <div className="flex flex-1 items-start justify-center px-4 pb-[max(2rem,env(safe-area-inset-bottom))] pt-4 sm:items-center sm:px-6 sm:pb-16 sm:pt-0">
         <div className="w-full max-w-sm">
-          <h1 className="text-center font-serif text-3xl tracking-tight text-ink">
+          <h1 className="text-center font-serif text-[1.75rem] tracking-tight text-ink sm:text-3xl">
             Sign in
           </h1>
           <p className="mt-2 text-center text-sm text-ink-muted">
             Opens the app dashboard for James and Mary
           </p>
 
-          <div className="mt-8 rounded-2xl border border-ink/[0.06] bg-white p-6 shadow-card">
+          <div className="mt-6 rounded-2xl border border-ink/[0.06] bg-white p-5 shadow-card sm:mt-8 sm:p-6">
             {!configured ? (
               <p className="text-sm text-ink-muted" role="alert">
                 Login is not configured. Add{" "}

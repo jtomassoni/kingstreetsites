@@ -34,15 +34,18 @@ export default async function MealsLayout({
     return (
       <div className="tools-meals min-h-dvh" data-theme="light">
         <ThemeScript />
-        <div className="border-b border-border/50 bg-card/80 px-3 py-2 text-sm backdrop-blur md:px-4">
-          <div className="mx-auto flex max-w-[1600px] items-center justify-between gap-3">
+        <div className="border-b border-border/50 bg-card/90 px-3 py-1.5 text-sm backdrop-blur supports-[backdrop-filter]:bg-card/80 md:px-4 md:py-2">
+          <div className="mx-auto flex max-w-[1600px] items-center justify-between gap-2">
             <Link
               href="/tools"
-              className="font-medium text-primary hover:underline"
+              className="inline-flex min-h-9 items-center gap-1.5 rounded-lg px-1.5 font-medium text-primary active:opacity-70 hover:underline"
             >
-              ← Tools
+              <span aria-hidden>←</span>
+              <span>All apps</span>
             </Link>
-            <span className="truncate text-muted-foreground">{email}</span>
+            <span className="max-w-[40%] truncate text-xs text-muted-foreground md:max-w-none md:text-sm">
+              {email}
+            </span>
           </div>
         </div>
         <AppShell user={{ name, email }}>{children}</AppShell>
