@@ -37,6 +37,9 @@
       ],
       "@projects/*": [
         "./modules/projects/*"
+      ],
+      "@restock/*": [
+        "./modules/restock/*"
       ]
     }
   },

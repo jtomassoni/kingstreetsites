@@ -3,6 +3,16 @@
     {
       "path": "/api/cron/recurring-invoices",
       "schedule": "0 14 * * *"
+    },
+    {
+      "path": "/api/cron/restock-tracker",
+      "schedule": "*/5 * * * *"
     }
-  ]
+  ],
+  "functions": {
+    "app/api/cron/restock-tracker/route.ts": {
+      "maxDuration": 300,
+      "memory": 3008
+    }
+  }
 }

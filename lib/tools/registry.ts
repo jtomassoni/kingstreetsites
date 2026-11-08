@@ -1,4 +1,4 @@
-export type ToolId = "meals" | "movies" | "projects" | "arcade";
+export type ToolId = "meals" | "movies" | "projects" | "restock" | "arcade";
 
 export type ToolAccess = {
   /** Must be signed in (SUPER_ADMIN_USERS or APP_USERS). */
@@ -14,7 +14,7 @@ export type ToolDefinition = {
   shortTitle: string;
   description: string;
   /** Lucide icon name used by the dashboard. */
-  icon: "UtensilsCrossed" | "Clapperboard" | "ListTodo" | "Gamepad2";
+  icon: "UtensilsCrossed" | "Clapperboard" | "ListTodo" | "PackageSearch" | "Gamepad2";
   href: string;
   access: ToolAccess;
   /** When false, the tool route is a documented stub. */
@@ -51,6 +51,17 @@ export const TOOLS: readonly ToolDefinition[] = [
       "Big home projects with budgets, estimates, actuals, and comments.",
     icon: "ListTodo",
     href: "/tools/projects",
+    access: { requireAuth: true, businessAdmin: false },
+    implemented: true,
+  },
+  {
+    id: "restock",
+    title: "Restock Tracker",
+    shortTitle: "Restock",
+    description:
+      "Watches nearby GameStop and Best Buy stores for the Zelda Switch 2 every 5 minutes.",
+    icon: "PackageSearch",
+    href: "/tools/restock-tracker",
     access: { requireAuth: true, businessAdmin: false },
     implemented: true,
   },
