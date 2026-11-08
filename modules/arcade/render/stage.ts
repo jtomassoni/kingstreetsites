@@ -1,6 +1,6 @@
 import { destinationById, type Avatar } from "@arcade/game/content";
 import { drawHud } from "@arcade/render/paint";
-import { H, PLAYER_Y, W, type Enemy, type RunState, type StyleId } from "@arcade/game/types";
+import { H, PLAYER_Y, W, type Enemy, type RunState } from "@arcade/game/types";
 import {
   ACESFilmicToneMapping,
   AnimationClip,
@@ -25,7 +25,6 @@ import {
   MeshBasicMaterial,
   MeshStandardMaterial,
   DoubleSide,
-  NoToneMapping,
   Object3D,
   PerspectiveCamera,
   PlaneGeometry,
@@ -614,7 +613,6 @@ export class LaneStage {
   private viewW = 1;
   private viewH = 1;
   private dpr = 1;
-  private style: StyleId = "chunky";
   private ready = false;
 
   constructor(
@@ -733,18 +731,17 @@ export class LaneStage {
     this.viewW = Math.max(1, viewW);
     this.viewH = Math.max(1, viewH);
     this.dpr = dpr;
-    this.applyStyle(this.style);
+    this.applyView();
     this.camera.aspect = this.viewW / this.viewH;
     this.camera.updateProjectionMatrix();
-    this.hud.width = Math.floor(this.viewW * (this.style === "pixel" ? 1 : dpr));
-    this.hud.height = Math.floor(this.viewH * (this.style === "pixel" ? 1 : dpr));
+    this.hud.width = Math.floor(this.viewW * dpr);
+    this.hud.height = Math.floor(this.viewH * dpr);
     this.hud.style.width = `${this.viewW}px`;
     this.hud.style.height = `${this.viewH}px`;
   }
 
-  render(state: RunState, style: StyleId, avatar: Avatar, showHitboxes: boolean, reducedMotion: boolean, dt: number) {
+  render(state: RunState, avatar: Avatar, showHitboxes: boolean, reducedMotion: boolean, dt: number) {
     if (!this.ready) return;
-    if (style !== this.style) this.applyStyle(style);
     this.dress(state.destination);
     this.ensurePlayer(avatar);
     if (this.roadMap) this.roadMap.offset.y = -state.time * 0.55;
@@ -760,7 +757,7 @@ export class LaneStage {
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, this.hud.width, this.hud.height);
     ctx.setTransform(this.hud.width / W, 0, 0, this.hud.height / H, 0, 0);
-    drawHud(ctx, state, style, (x, y) => this.project(x, y));
+    drawHud(ctx, state, (x, y) => this.project(x, y));
     if (showHitboxes) this.paintHitboxes(ctx, state);
   }
 
@@ -768,15 +765,12 @@ export class LaneStage {
     this.renderer.dispose();
   }
 
-  private applyStyle(style: StyleId) {
-    this.style = style;
-    const pixel = style === "pixel";
-    this.renderer.setPixelRatio(pixel ? 0.42 : Math.min(this.dpr, 1.75));
+  private applyView() {
+    this.renderer.setPixelRatio(Math.min(this.dpr, 1.75));
     this.renderer.setSize(this.viewW, this.viewH, true);
-    this.renderer.toneMapping = style === "chunky" ? ACESFilmicToneMapping : NoToneMapping;
-    this.canvas.style.imageRendering = pixel ? "pixelated" : "auto";
-    this.hemi.intensity = style === "illustrated" ? 0.62 : 1.05;
-    this.hemi.color.set(style === "illustrated" ? "#ffe8c7" : "#f4fbff");
+    this.renderer.toneMapping = ACESFilmicToneMapping;
+    this.hemi.intensity = 1.05;
+    this.hemi.color.set("#f4fbff");
   }
 
   private dress(destinationId: string) {
@@ -902,7 +896,7 @@ export class LaneStage {
     const step = reducedMotion ? 0 : dt;
     if (this.player) {
       const point = lanePoint(state.playerX, state.playerY);
-      const playerScale = PLAYER_SCALE * (this.style === "chunky" ? 1.08 : 1);
+      const playerScale = PLAYER_SCALE * 1.08;
       this.player.root.position.set(point.x, 0, point.z);
       this.player.root.rotation.y = -state.aim;
       this.player.root.scale.setScalar(playerScale);
@@ -956,7 +950,7 @@ export class LaneStage {
         actor = created;
       }
       const point = lanePoint(enemy.x, enemy.y);
-      const scale = bodyScale(enemy) * personScale(enemy) * (this.style === "chunky" ? 1.06 : 1);
+      const scale = bodyScale(enemy) * personScale(enemy) * 1.06;
       actor.root.visible = true;
       actor.root.position.set(point.x, enemy.sprite === "pothole" ? 0 : 0, point.z);
       actor.root.rotation.y = enemy.sprite === "pothole" || enemy.sprite === "hole-boss" ? 0 : Math.PI + enemy.vx * 0.02;
