@@ -74,8 +74,9 @@ function checkTone(status: CheckStatus | undefined): string {
 }
 
 function isStale(lastOk: CheckRecord | undefined, last: CheckRecord | undefined): boolean {
-  if (!lastOk) return Boolean(last && last.status !== "ok");
-  if (last && last.status !== "ok") return true;
+  const effectiveLast = last?.status === "skipped" ? lastOk : last;
+  if (!lastOk) return Boolean(effectiveLast && effectiveLast.status !== "ok");
+  if (effectiveLast && effectiveLast.status !== "ok") return true;
   const t = Date.parse(lastOk.finished_at ?? lastOk.started_at);
   if (!Number.isFinite(t)) return true;
   return Date.now() - t > 15 * 60 * 1000;
@@ -210,8 +211,8 @@ export function RestockApp({ initial }: Props) {
             </p>
           ) : (
             <p className="mt-2 text-xs text-ink-muted">
-              Vercel cron is configured for every 5 minutes. Monitoring is not
-              confirmed live until a scheduled check has succeeded after deploy.
+              Every 5 minutes this Mac loads each product page in Chrome, the
+              same way a refresh would. Vercel cannot do that from a datacenter.
             </p>
           )}
           <button

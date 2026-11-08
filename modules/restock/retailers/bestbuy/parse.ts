@@ -131,6 +131,119 @@ function jsonErrorMessage(json: unknown): string | null {
   return typeof msg === "string" && msg.trim() ? msg.trim() : null;
 }
 
+function availabilityFromIspu(raw: Raw): boolean {
+  const block = Array.isArray(raw.ispuAvailability)
+    ? (raw.ispuAvailability[0] as Raw | undefined)
+    : raw.ispuAvailability && typeof raw.ispuAvailability === "object"
+      ? (raw.ispuAvailability as Raw)
+      : raw;
+  if (!block || typeof block !== "object") return false;
+  if (block.pickupEligible === true || block.instoreInventoryAvailable === true) {
+    return true;
+  }
+  const qty = num(block.quantity);
+  return qty !== null && qty > 0;
+}
+
+/**
+ * Map one nearby-location / pickup-store object from the PDP fulfillment
+ * GraphQL payload. Only in-stock stores are returned (same as the public API).
+ */
+export function mapBestBuyFulfillmentStore(raw: unknown): StoreObservation | null {
+  if (!raw || typeof raw !== "object") return null;
+  const r = raw as Raw;
+  const nested = r.store && typeof r.store === "object" ? (r.store as Raw) : null;
+  const storeId = str(r.storeId) ?? str(nested?.storeId);
+  const name = str(r.name) ?? str(r.longName) ?? str(nested?.name);
+  if (!storeId || !name) return null;
+  if (!availabilityFromIspu(r) && !availabilityFromIspu(nested ?? {})) return null;
+  const address1 = str(r.address) ?? str(r.address1) ?? str(nested?.address);
+  const city = str(r.city) ?? str(nested?.city);
+  const region = str(r.state) ?? str(r.region) ?? str(nested?.state);
+  const postalCode = str(r.zip) ?? str(r.postalCode) ?? str(nested?.zip);
+  return {
+    storeId,
+    name,
+    address1,
+    address2: str(r.address2) ?? str(nested?.address2),
+    city,
+    stateCode: region,
+    postalCode,
+    phone: str(r.phone) ?? str(nested?.phone),
+    directionsUrl: directionsUrl([address1, city, region, postalCode]),
+    distanceMiles: num(r.distance) ?? num(r.distanceMiles),
+    availability: "available",
+    detail: "Available for store pickup",
+  };
+}
+
+/** Product-page fulfillment GraphQL (the request the Best Buy PDP fires itself). */
+export function parseBestBuyFulfillment(input: {
+  status: number;
+  body: string;
+  radiusMiles?: number;
+}): CheckResult {
+  const base = {
+    method: "browser" as const,
+    stores: [] as StoreObservation[],
+    coversAllStoresInRange: false,
+  };
+  if (looksLikeBestBuyBlock(input.body)) {
+    return { ...base, status: "blocked", error: "Best Buy returned a block/challenge page" };
+  }
+  if (input.status === 403 || input.status === 429) {
+    return {
+      ...base,
+      status: "blocked",
+      error: `Best Buy fulfillment refused the request (HTTP ${input.status})`,
+    };
+  }
+  if (input.status < 200 || input.status >= 300) {
+    return {
+      ...base,
+      status: "error",
+      error: `Best Buy fulfillment responded with HTTP ${input.status}`,
+    };
+  }
+  let json: unknown = null;
+  try {
+    json = JSON.parse(input.body);
+  } catch {
+    return { ...base, status: "malformed", error: "Best Buy fulfillment response was not JSON" };
+  }
+  if (!json || typeof json !== "object") {
+    return { ...base, status: "malformed", error: "Best Buy fulfillment JSON was not an object" };
+  }
+  const fo = (json as Raw).data && typeof (json as Raw).data === "object"
+    ? ((json as Raw).data as Raw).fulfillmentOptions
+    : (json as Raw).fulfillmentOptions;
+  if (!fo || typeof fo !== "object") {
+    return {
+      ...base,
+      status: "malformed",
+      error: "Best Buy fulfillment JSON is missing fulfillmentOptions",
+    };
+  }
+  const options = fo as Raw;
+  const ispuList = Array.isArray(options.ispuDetails) ? options.ispuDetails : [];
+  const nearby: unknown[] = [];
+  for (const entry of ispuList) {
+    if (!entry || typeof entry !== "object") continue;
+    const e = entry as Raw;
+    if (Array.isArray(e.nearbyLocations)) nearby.push(...e.nearbyLocations);
+    if (e.nearbyLocation) nearby.push(e.nearbyLocation);
+  }
+  const mapped = nearby
+    .map(mapBestBuyFulfillmentStore)
+    .filter((s): s is StoreObservation => Boolean(s));
+  const radius = input.radiusMiles;
+  const filtered =
+    typeof radius === "number" && Number.isFinite(radius)
+      ? filterStoresByRadius(mapped, radius)
+      : mapped;
+  return { ...base, status: "ok", error: null, stores: filtered };
+}
+
 export function parseBestBuyResponse(input: BestBuyParseInput): CheckResult {
   const base = {
     method: "api" as const,

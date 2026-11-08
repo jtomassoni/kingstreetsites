@@ -8,8 +8,8 @@ export const RUN_LOCK_TTL_MS = 4 * 60 * 1000;
 export const MANUAL_CHECK_MIN_INTERVAL_MS = 60 * 1000;
 /** Per-retailer HTTP timeout. */
 export const REQUEST_TIMEOUT_MS = 20 * 1000;
-/** Whole browser session budget (launch + navigate + fetch). */
-export const BROWSER_BUDGET_MS = 60 * 1000;
+/** Whole browser session budget (Chrome attach + navigate + fetch). */
+export const BROWSER_BUDGET_MS = 90 * 1000;
 /** Max delivery attempts for a single alert before it is marked failed for good. */
 export const MAX_ALERT_ATTEMPTS = 6;
 

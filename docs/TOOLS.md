@@ -109,9 +109,10 @@ Private tool at `/tools/restock-tracker`. It does **not** scrape behind CAPTCHAs
 | `RESEND_API_KEY` | For email | Same Resend key the rest of the app uses. |
 | `RESTOCK_FROM_EMAIL` or `CONTACT_FROM_EMAIL` | For email | Verified sender. |
 | `RESTOCK_ALERT_EMAILS` | Optional | Default recipients (comma-separated). Also editable in the dashboard. If empty, the UI shows **Notifications not configured**. |
-| `BESTBUY_API_KEY` | For Best Buy | Free key from [developer.bestbuy.com](https://developer.bestbuy.com). Without it, Best Buy stays **unverified**. |
-| `RESTOCK_DISABLE_BROWSER` | Optional | Set to `1` to skip Playwright. |
+| `BESTBUY_API_KEY` | Optional | Documented Best Buy API fallback if headed Chrome is unavailable. Not used for the 5-minute page refresh. |
+| `RESTOCK_DISABLE_BROWSER` | Optional | Set to `1` to skip headed Chrome. |
 | `RESTOCK_BROWSER_EXECUTABLE` | Optional | Local Chrome path. |
+| `RESTOCK_CHROME_PORT` | Optional | CDP port for the dedicated headed Chrome (default `9333`). |
 
 ### Database
 
@@ -131,8 +132,10 @@ Applies `db/meals/migrations/011_restock_tracker.sql` (settings, products, check
 
 ### How checks work
 
-- **GameStop:** `Stores-FindStores?products=451607:1` returns every store in range with `isInStock`. Plain HTTP is Cloudflare-blocked (403); the server falls back to a Playwright Chrome session that loads the public product page, then calls the same JSON endpoint in-page. Verified from a real browser on 2026-11-08 (Colorado Springs Hancock Plaza in stock at 100 miles; 13 Denver-area stores at 30 miles with `isInStock: false`).
-- **Best Buy:** documented API `GET /v1/products/{sku}/stores.json?postalCode=`. Returns only in-stock stores (≤ 250 miles); we filter to the selected radius. The public storefront was not reachable from this environment (HTTP/2 protocol error / timeouts, including Playwright). Do not treat an empty list as a complete sold-out census.
+- **GameStop:** Load the public product page in headed Chrome, then read `Stores-FindStores` from that session. Cloudflare 403s curl, headless Chrome, and Vercel.
+- **Best Buy:** Load the public product page in the same headed Chrome and parse the fulfillment GraphQL request the page fires itself (`buttonState` + nearby pickup stores). Headless/datacenter sessions never finish `page.goto`.
+
+Both run on this Mac via `npm run restock:check` (or `npm run restock:install-agent` every 5 minutes) and write to the meals Neon database the dashboard reads.
 
 Alerts fire on the first confirmed availability and on unavailable→available. Failed checks never reset last-known state. Failed emails stay `pending` and retry with backoff; successful sends are never repeated.
 
@@ -143,4 +146,4 @@ Alerts fire on the first confirmed availability and on unavailable→available. 
 - Login rate limiting is in-memory per server instance.
 - Arcade device-name score claims are unchanged; tools login gates access to the game, not gamertag ownership.
 - Meal photo uploads remain disabled until storage is chosen (same as Meal Planner).
-- Restock Tracker monitoring is not live until a deployed cron tick and (if configured) an email delivery have both succeeded. Best Buy stays unverified without `BESTBUY_API_KEY`.
+- Restock Tracker stays unverified until a headed Chrome check from this Mac has succeeded (`npm run restock:check`). Datacenter/headless browsers cannot load these storefronts.

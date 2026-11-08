@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   bestBuyAvailabilityUrl,
   filterStoresByRadius,
+  mapBestBuyFulfillmentStore,
   mapBestBuyStore,
+  parseBestBuyFulfillment,
   parseBestBuyResponse,
   redactBestBuyKey,
 } from "../../modules/restock/retailers/bestbuy/parse";
@@ -19,6 +21,65 @@ const documentedStore = {
   lowStock: false,
   distance: 16.594,
 };
+
+describe("Best Buy PDP fulfillment parser", () => {
+  it("treats a Sold Out fulfillment payload as ok with no in-stock stores", () => {
+    const result = parseBestBuyFulfillment({
+      status: 200,
+      body: JSON.stringify({
+        data: {
+          fulfillmentOptions: {
+            buttonStates: [
+              { buttonState: "SOLD_OUT", displayText: "Sold Out", skuId: "6691841" },
+            ],
+            ispuDetails: [
+              {
+                nearbyLocations: null,
+                nearbyLocation: null,
+                store: { storeId: "382", name: null, city: null, zip: null },
+              },
+            ],
+          },
+        },
+      }),
+      radiusMiles: 30,
+    });
+    expect(result).toMatchObject({
+      status: "ok",
+      method: "browser",
+      stores: [],
+      coversAllStoresInRange: false,
+      error: null,
+    });
+  });
+
+  it("maps a nearby in-stock fulfillment store", () => {
+    const store = mapBestBuyFulfillmentStore({
+      storeId: "382",
+      name: "Denver West",
+      city: "Golden",
+      state: "CO",
+      zip: "80401",
+      distance: 4,
+      ispuAvailability: [{ pickupEligible: true, quantity: 1 }],
+    });
+    expect(store).toMatchObject({
+      storeId: "382",
+      name: "Denver West",
+      availability: "available",
+    });
+  });
+
+  it("does not map a store with no pickup-eligibility signal", () => {
+    expect(
+      mapBestBuyFulfillmentStore({
+        storeId: "382",
+        name: "Denver West",
+        ispuAvailability: [{ pickupEligible: null, quantity: null }],
+      }),
+    ).toBeNull();
+  });
+});
 
 describe("Best Buy availability parser", () => {
   it("builds the documented real-time availability URL", () => {

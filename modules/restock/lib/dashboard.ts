@@ -11,7 +11,7 @@ import {
   listStoreStates,
 } from "@restock/lib/store";
 import { ADAPTERS } from "@restock/retailers/index";
-import { browserSupported } from "@restock/lib/browser";
+import { browserUsesRealChrome } from "@restock/lib/browser";
 import {
   RETAILERS,
   type ProviderStatus,
@@ -41,8 +41,11 @@ function providerStatuses(
     } else if (latest && latest.status !== "ok") {
       note = `Last attempt failed (${latest.status}): ${latest.error ?? "no details"}`;
     }
-    if (retailer === "gamestop" && configured && !browserSupported()) {
-      note = [note, "Browser fallback unavailable in this environment."]
+    if (!verified && !browserUsesRealChrome()) {
+      note = [
+        note,
+        "Storefront checks run from headed Chrome on this Mac (`npm run restock:check`). Vercel cannot load these product pages.",
+      ]
         .filter(Boolean)
         .join(" ");
     }

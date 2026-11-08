@@ -1,6 +1,7 @@
 import {
   browserSupported,
   fetchJsonInPage,
+  looksLikeChallengeTitle,
   withBrowserSession,
   type BrowserSession,
 } from "@restock/lib/browser";
@@ -26,9 +27,6 @@ const JSON_HEADERS = {
   "X-Requested-With": "XMLHttpRequest",
 };
 
-const DESKTOP_UA =
-  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36";
-
 function productSlug(product: TrackedProduct): string | undefined {
   // Keep the canonical PDP URL the user tracked so "Open product" is exact.
   const match = product.product_url.match(/\/products\/([^/]+)\/\d+\.html/);
@@ -48,7 +46,6 @@ async function checkDirect(
     const res = await fetchWithTimeout(url, {
       headers: {
         ...JSON_HEADERS,
-        "User-Agent": DESKTOP_UA,
         Referer: product.product_url,
         "Accept-Language": "en-US,en;q=0.9",
       },
@@ -80,8 +77,22 @@ async function checkViaBrowserPage(
     waitUntil: "domcontentloaded",
   });
   const pageStatus = response?.status() ?? 0;
+  const title = (await page.title().catch(() => "")) || "";
+  if (
+    pageStatus === 403 ||
+    pageStatus === 429 ||
+    looksLikeChallengeTitle(title)
+  ) {
+    return {
+      status: "blocked",
+      method: "browser",
+      stores: [],
+      error: `GameStop blocked the browser session on the product page (HTTP ${pageStatus || "?"}, “${title || "no title"}”)`,
+      coversAllStoresInRange: true,
+    };
+  }
   const pageHtml = await page.content().catch(() => "");
-  if (pageStatus === 403 || pageStatus === 429 || looksLikeCloudflareBlock(pageHtml)) {
+  if (looksLikeCloudflareBlock(pageHtml)) {
     return {
       status: "blocked",
       method: "browser",
@@ -90,6 +101,9 @@ async function checkViaBrowserPage(
       coversAllStoresInRange: true,
     };
   }
+  // Let storefront JS (session cookies) finish before calling FindStores.
+  await page.waitForLoadState("load").catch(() => undefined);
+  await new Promise((resolve) => setTimeout(resolve, 1500));
 
   const params = new URLSearchParams({
     postalCode: ctx.postalCode,
@@ -133,11 +147,14 @@ async function checkViaBrowser(
   }
 }
 
+export const GAMESTOP_CONFIG_HINT =
+  "GameStop Cloudflare blocks datacenter browsers (Vercel, headless Chrome). Nearby inventory is checked from headed Google Chrome on this Mac.";
+
 export const gamestopAdapter: RetailerAdapter = {
   id: "gamestop",
   label: "GameStop",
   isConfigured: () => true,
-  configurationHint: "",
+  configurationHint: GAMESTOP_CONFIG_HINT,
   productUrl: (product) =>
     product.product_url ||
     gamestopProductUrl(product.retailer_product_id, productSlug(product)),

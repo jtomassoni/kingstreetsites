@@ -17,6 +17,8 @@
     "migrate:tax": "node scripts/psql-with-env.mjs lib/db-migrate-tax.sql",
     "migrate:franchise-groups": "node scripts/psql-with-env.mjs lib/db-migrate-franchise-groups.sql",
     "migrate:meals": "node scripts/meals-migrate.mjs",
+    "restock:check": "npx tsx --tsconfig tsconfig.json scripts/restock-check.ts",
+    "restock:install-agent": "bash scripts/install-restock-agent.sh",
     "reset": "node scripts/psql-with-env.mjs lib/db-reset-dev.sql"
   },
   "dependencies": {

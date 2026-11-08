@@ -16,7 +16,7 @@ export function adapterFor(retailer: RetailerId): RetailerAdapter {
  * Products tracked by default for a new household. Verified identities:
  *  - GameStop product 451607 (PDP title "Nintendo Switch 2 The Legend of
  *    Zelda 40th Anniversary Edition", data-pid 451607).
- *  - Best Buy SKU 13234053 (bestbuy.com /product/…/J7GSL57HTY/sku/13234053).
+ *  - Best Buy SKU 6691841 (bestbuy.com /product/…/J7GSL57HTY; live PDP skuId).
  */
 export const DEFAULT_TRACKED_PRODUCTS = [
   {
@@ -28,7 +28,7 @@ export const DEFAULT_TRACKED_PRODUCTS = [
   },
   {
     retailer: "bestbuy" as const,
-    retailerProductId: "13234053",
+    retailerProductId: "6691841",
     title: "Switch 2 – The Legend of Zelda – 40th Anniversary Edition",
     productUrl:
       "https://www.bestbuy.com/product/switch-2-the-legend-of-zelda-40th-anniversary-edition/J7GSL57HTY",

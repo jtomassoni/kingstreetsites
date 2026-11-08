@@ -1,5 +1,9 @@
 import { randomUUID } from "node:crypto";
-import { browserSupported, withBrowserSession } from "@restock/lib/browser";
+import {
+  browserSupported,
+  browserUsesRealChrome,
+  withBrowserSession,
+} from "@restock/lib/browser";
 import {
   buildRestockEmail,
   deliverDueAlerts,
@@ -177,7 +181,7 @@ async function persistProductCheck(
  */
 export async function runHouseholdCheck(
   householdId: string,
-  opts: { trigger: "cron" | "manual" },
+  opts: { trigger: "cron" | "manual"; ignoreBackoff?: boolean },
 ): Promise<RunSummary> {
   const settings = await loadSettings(householdId);
   const now = new Date();
@@ -208,7 +212,7 @@ export async function runHouseholdCheck(
         alertsFailed,
       };
     }
-    if (isBackedOff(settings.backoff_until, now)) {
+    if (!opts.ignoreBackoff && isBackedOff(settings.backoff_until, now)) {
       return {
         ...base,
         skippedReason: `Backing off until ${settings.backoff_until} after repeated failures`,
@@ -280,6 +284,15 @@ export async function runHouseholdCheck(
     for (const product of products) {
       const startedAt = Date.now();
       try {
+        // Vercel/Lambda cannot load these storefronts. Skip here so a blocked
+        // cron tick does not stamp the dashboard stale; the Mac Chrome worker
+        // records checks against the same database.
+        if (
+          !browserUsesRealChrome() &&
+          process.env.RESTOCK_FORCE_BROWSER !== "1"
+        ) {
+          continue;
+        }
         const result = await fetchResult(product, baseCtx);
         if (
           result.status === "blocked" &&
@@ -350,10 +363,13 @@ export async function runHouseholdCheck(
       }
     }
 
-    // Success = every configured provider parsed cleanly. A blocked/erroring
-    // provider backs the whole schedule off so we never hammer a WAF.
+    // Success = every provider that actually ran parsed cleanly. Skipped
+    // (missing API key, or GameStop on Vercel) does not back the schedule off.
     const meaningful = results.filter((r) => r.status !== "skipped");
-    const success = meaningful.length > 0 && meaningful.every((r) => r.status === "ok");
+    const success =
+      meaningful.length === 0
+        ? true
+        : meaningful.every((r) => r.status === "ok");
     const worst = worstStatus(meaningful.map((r) => r.status));
     await markRunOutcome(householdId, {
       success,
@@ -377,7 +393,9 @@ export async function runHouseholdCheck(
 }
 
 /** Cron entry: ensure settings exist for every household, then check each. */
-export async function runAllHouseholdChecks(): Promise<{
+export async function runAllHouseholdChecks(opts?: {
+  ignoreBackoff?: boolean;
+}): Promise<{
   households: number;
   ran: number;
   skipped: number;
@@ -387,7 +405,12 @@ export async function runAllHouseholdChecks(): Promise<{
   const summaries: RunSummary[] = [];
   for (const householdId of ids) {
     await ensureSettings(householdId, { alertEmails: defaultAlertEmails() });
-    summaries.push(await runHouseholdCheck(householdId, { trigger: "cron" }));
+    summaries.push(
+      await runHouseholdCheck(householdId, {
+        trigger: "cron",
+        ignoreBackoff: opts?.ignoreBackoff,
+      }),
+    );
   }
   return {
     households: ids.length,
