@@ -12,7 +12,6 @@ export default defineConfig({
       "@meals": path.resolve(process.cwd(), "modules/meals"),
       "@arcade": path.resolve(process.cwd(), "modules/arcade"),
       "@movies": path.resolve(process.cwd(), "modules/movies"),
-      "@restock": path.resolve(process.cwd(), "modules/restock"),
     },
   },
 });

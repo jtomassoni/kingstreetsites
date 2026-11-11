@@ -56,8 +56,7 @@ modules/meals/             # Meal Planner business logic + UI
 modules/movies/            # Watching schedule (TV shows + MT air times)
 modules/projects/          # House Projects (board + costs + comments)
 modules/arcade/            # Hold the Lane game
-modules/restock/           # Restock Tracker (GameStop / Best Buy)
-db/meals/migrations/       # Meal Planner + watching + house projects + restock SQL (migrate:meals)
+db/meals/migrations/       # Meal Planner + watching + house projects SQL (migrate:meals)
 docs/TOOLS.md              # This file
 ```
 
@@ -80,64 +79,14 @@ No other navigation lists need editing.
 - **Arcade scores**: local `.data/board.json`, or Upstash/Vercel KV via `UPSTASH_REDIS_*` / `KV_REST_API_*`.
 - **Movie List / Watching** (`/tools/movies`): shared “when can we actually watch” calendar. Times are always stored and shown in **America/Denver** (Mountain Time). Adding a show requires a **streaming service** (Max, Disney+, Netflix, …) plus the real available night/time — network/TVMaze listings (e.g. Food Network `8/7c` → `6:00 PM` MT) are kept as reference only and **sync does not overwrite** stream overrides. Hulu titles are tagged **Disney+** (Disney Bundle / Hulu-in-Disney+). Shows without a next episode are labeled **Not airing** and drop off the week calendar. No AI key required. Tables live on the meals Neon DB (`watching_shows` + `watching_show_streams` via migrations `007`–`009`).
 - **House Projects** (`/tools/projects`): shared board for big home projects (not chores). Hierarchy is **project → sub-project → line item**. Board groups are **Backlog / Planned / In progress / Blocked / Done** with manual priority within each group; archive soft-hides a project without deleting it. Projects have an optional budget; line items carry estimate + actual (integer cents) and optional assignee (`james` | `mary`). Comments work on projects, sub-projects, and line items. No AI key required. Tables live on the meals Neon DB (`house_projects`, `house_sub_projects`, `house_line_items`, `house_project_comments` via migration `010`).
-- **Restock Tracker** (`/tools/restock-tracker`): watches nearby GameStop and Best Buy stores for the Zelda 40th Anniversary Switch 2. Defaults to ZIP `80219` and 30 miles. Vercel cron `*/5 * * * *` hits `/api/cron/restock-tracker` (Bearer `CRON_SECRET`). Tables live on the meals Neon DB via migration `011_restock_tracker.sql`. See the Restock Tracker section below.
 
-On Vercel set `SUPER_ADMIN_USERS`, `APP_USERS`, `TOOLS_SESSION_SECRET`, and `MEALS_DATABASE_URL`. After deploy, run `npm run migrate:meals` if meals/watching/house-projects/restock migrations are not applied yet.
+On Vercel set `SUPER_ADMIN_USERS`, `APP_USERS`, `TOOLS_SESSION_SECRET`, and `MEALS_DATABASE_URL`. After deploy, run `npm run migrate:meals` if meals/watching/house-projects migrations are not applied yet.
 
 ## Rollback
 
 1. Revert or undeploy the branch on Vercel.
 2. Standalone `mealplanner` and `shootemup` apps/databases remain untouched.
 3. CRM data is unaffected (separate database).
-
-## Restock Tracker
-
-Private tool at `/tools/restock-tracker`. It does **not** scrape behind CAPTCHAs. Empty or blocked retailer responses are never shown as “sold out.”
-
-### Tracked products
-
-| Retailer | ID | URL |
-|---|---|---|
-| GameStop | `451607` | [product page](https://www.gamestop.com/consoles-hardware/nintendo-switch-2/products/nintendo-switch-2-the-legend-of-zelda-40th-anniversary-edition/451607.html) |
-| Best Buy | SKU `13234053` (page `J7GSL57HTY`) | [product page](https://www.bestbuy.com/product/switch-2-the-legend-of-zelda-40th-anniversary-edition/J7GSL57HTY) |
-
-### Environment
-
-| Variable | Required | Purpose |
-|---|---|---|
-| `CRON_SECRET` | Production | Vercel sends `Authorization: Bearer <CRON_SECRET>` to `/api/cron/restock-tracker`. The route fails closed if this is missing or shorter than 16 characters. |
-| `RESEND_API_KEY` | For email | Same Resend key the rest of the app uses. |
-| `RESTOCK_FROM_EMAIL` or `CONTACT_FROM_EMAIL` | For email | Verified sender. |
-| `RESTOCK_ALERT_EMAILS` | Optional | Default recipients (comma-separated). Also editable in the dashboard. If empty, the UI shows **Notifications not configured**. |
-| `BESTBUY_API_KEY` | Optional | Documented Best Buy API fallback if headed Chrome is unavailable. Not used for the 5-minute page refresh. |
-| `RESTOCK_DISABLE_BROWSER` | Optional | Set to `1` to skip headed Chrome. |
-| `RESTOCK_BROWSER_EXECUTABLE` | Optional | Local Chrome path. |
-| `RESTOCK_CHROME_PORT` | Optional | CDP port for the dedicated headed Chrome (default `9333`). |
-
-### Database
-
-```bash
-npm run migrate:meals
-```
-
-Applies `db/meals/migrations/011_restock_tracker.sql` (settings, products, checks, store state, stock events, alert queue) on the meals Neon database. The script skips already-applied files.
-
-### Vercel
-
-1. Merge keeps the existing `0 14 * * *` recurring-invoice cron and adds `*/5 * * * *` → `/api/cron/restock-tracker`.
-2. Set `CRON_SECRET`, `MEALS_DATABASE_URL`, Resend vars, and (recommended) `BESTBUY_API_KEY` on the project.
-3. Deploy, then run `npm run migrate:meals` against production meals Neon.
-4. Open `/tools/restock-tracker`, set ZIP/radius/emails, click **Check now**.
-5. Confirm a scheduled run in Vercel → Crons / function logs before treating monitoring as live. Super admin can send a test email from the dashboard.
-
-### How checks work
-
-- **GameStop:** Load the public product page in headed Chrome, then read `Stores-FindStores` from that session. Cloudflare 403s curl, headless Chrome, and Vercel.
-- **Best Buy:** Load the public product page in the same headed Chrome and parse the fulfillment GraphQL request the page fires itself (`buttonState` + nearby pickup stores). Headless/datacenter sessions never finish `page.goto`.
-
-Both run on this Mac via `npm run restock:check` (or `npm run restock:install-agent` every 5 minutes) and write to the meals Neon database the dashboard reads.
-
-Alerts fire on the first confirmed availability and on unavailable→available. Failed checks never reset last-known state. Failed emails stay `pending` and retry with backoff; successful sends are never repeated.
 
 ## Limitations
 
@@ -146,4 +95,3 @@ Alerts fire on the first confirmed availability and on unavailable→available. 
 - Login rate limiting is in-memory per server instance.
 - Arcade device-name score claims are unchanged; tools login gates access to the game, not gamertag ownership.
 - Meal photo uploads remain disabled until storage is chosen (same as Meal Planner).
-- Restock Tracker stays unverified until a headed Chrome check from this Mac has succeeded (`npm run restock:check`). Datacenter/headless browsers cannot load these storefronts.

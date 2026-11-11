@@ -5,8 +5,6 @@ const nextConfig: NextConfig = {
   serverExternalPackages: [
     "@neondatabase/serverless",
     "pg",
-    "playwright-core",
-    "@sparticuz/chromium",
   ],
   experimental: {
     serverActions: {
