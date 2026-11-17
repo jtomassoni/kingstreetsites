@@ -46,3 +46,22 @@ export type WatchingShow = {
   updated_at: string;
   streams: WatchingShowStream[];
 };
+
+export type MovieWishlistStatus = "wishlist" | "watched";
+export type MovieVote = "up" | "down";
+export type MovieVoter = "james" | "mary";
+
+export type MovieWishlistItem = {
+  id: string;
+  household_id: string;
+  title: string;
+  year: number | null;
+  notes: string | null;
+  status: MovieWishlistStatus;
+  james_vote: MovieVote | null;
+  mary_vote: MovieVote | null;
+  watched_at: string | null;
+  added_by: string | null;
+  created_at: string;
+  updated_at: string;
+};

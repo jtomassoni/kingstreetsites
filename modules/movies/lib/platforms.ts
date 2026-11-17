@@ -1,7 +1,12 @@
+import { WEEKDAYS, type Weekday } from "@movies/lib/timezone";
+
 /**
  * Where the household actually presses play.
  * Hulu titles are tagged Disney+ — we watch the Disney Bundle through Disney+,
  * and Disney is folding Hulu into that app.
+ *
+ * This household watches on streaming (not live TV). Calendar times are when
+ * the episode is available to press play — not the linear network airtime.
  */
 export const WATCH_PLATFORMS = [
   { id: "max", label: "Max", short: "Max" },
@@ -17,6 +22,12 @@ export const WATCH_PLATFORMS = [
 ] as const;
 
 export type WatchPlatformId = (typeof WATCH_PLATFORMS)[number]["id"];
+
+/** Live / same-time-as-listing destinations. */
+const LIVE_PLATFORMS = new Set<WatchPlatformId>(["youtube_tv", "cable"]);
+
+/** Max overnight drop for cable nets (Food Network 8/7c → Max Tue 1 AM). */
+const MAX_OVERNIGHT_TIME = "01:00";
 
 /** Legacy ids still accepted from older rows / forms. */
 const LEGACY_PLATFORM_ALIASES: Record<string, WatchPlatformId> = {
@@ -127,4 +138,64 @@ export function defaultWatchPlatform(
   const suggested = suggestedWatchPlatforms(network);
   const exclusive = suggested.filter((id) => id !== "other");
   return exclusive.length === 1 ? exclusive[0]! : null;
+}
+
+/** True when add/edit should ask which service — more than one real option. */
+export function needsWatchPlatformChoice(
+  network: string | null | undefined,
+): boolean {
+  return defaultWatchPlatform(network) === null;
+}
+
+export function isLiveWatchPlatform(
+  platform: string | null | undefined,
+): boolean {
+  const id = normalizeWatchPlatform(platform);
+  return id !== null && LIVE_PLATFORMS.has(id);
+}
+
+function nextWeekday(day: Weekday): Weekday {
+  const index = WEEKDAYS.indexOf(day);
+  return WEEKDAYS[(index + 1) % WEEKDAYS.length]!;
+}
+
+/**
+ * Watchable night/time for a platform, given the TVMaze/network listing.
+ *
+ * - Live (YouTube TV / cable): same as the listing
+ * - Streaming original on its home service: same as the listing
+ * - Max for broadcast/cable nets: next calendar day at 1:00 AM
+ *   (e.g. Food Network Mon 6 PM MT → Max Tue 1:00 AM)
+ */
+export function resolveStreamWatchSchedule(input: {
+  platform: string;
+  network?: string | null;
+  listedDays: Weekday[];
+  listedTime: string | null;
+}): { days: Weekday[]; time: string | null } {
+  const platform = normalizeWatchPlatform(input.platform);
+  const listedDays = input.listedDays.filter((d) => WEEKDAYS.includes(d));
+  const listedTime = input.listedTime;
+
+  if (!platform) {
+    return { days: listedDays, time: listedTime };
+  }
+
+  if (isLiveWatchPlatform(platform)) {
+    return { days: listedDays, time: listedTime };
+  }
+
+  const home = defaultWatchPlatform(input.network);
+  if (home && home === platform) {
+    return { days: listedDays, time: listedTime };
+  }
+
+  if (platform === "max" && listedDays.length > 0) {
+    return {
+      days: listedDays.map(nextWeekday),
+      time: MAX_OVERNIGHT_TIME,
+    };
+  }
+
+  return { days: listedDays, time: listedTime };
 }

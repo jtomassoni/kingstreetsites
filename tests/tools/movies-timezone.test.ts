@@ -169,7 +169,7 @@ describe("formatWatchingAirLine", () => {
     expect(
       formatWatchingAirLine({
         nextAirAt: "2026-11-03T01:00:00+00:00",
-        airDays: ["Monday"],
+        airDays: ["Tuesday"],
         airTimeLocal: "01:00",
         watchPlatformLabel: "Max",
         scheduleLocked: true,
@@ -178,7 +178,7 @@ describe("formatWatchingAirLine", () => {
         timezoneLabel: "MST",
         now: monday,
       }),
-    ).toBe("Max · Mon · 1:00 AM MST (lists Mon · 6:00 PM MST)");
+    ).toBe("Max · Tue · 1:00 AM MST (lists Mon · 6:00 PM MST)");
   });
 });
 

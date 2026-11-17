@@ -37,7 +37,7 @@ export const TOOLS: readonly ToolDefinition[] = [
     title: "Movie List",
     shortTitle: "Movies",
     description:
-      "TV shows we’re watching now — nights and times in Mountain Time.",
+      "TV schedule we’re watching, plus a movie wishlist with James/Mary thumbs.",
     icon: "Clapperboard",
     href: "/tools/movies",
     access: { requireAuth: true, businessAdmin: false },

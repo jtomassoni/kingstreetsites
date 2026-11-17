@@ -77,10 +77,10 @@ No other navigation lists need editing.
 - **CRM** (`DATABASE_URL`): unchanged. Do not run meals migrations against it.
 - **Meals** (`MEALS_DATABASE_URL`): reuse the existing Meal Planner Neon project so household/profile IDs stay valid. Migrations live in `db/meals/migrations/`. Apply with `npm run migrate:meals` only when you intend to migrate that database; the script skips already-applied files and does not reset or seed.
 - **Arcade scores**: local `.data/board.json`, or Upstash/Vercel KV via `UPSTASH_REDIS_*` / `KV_REST_API_*`.
-- **Movie List / Watching** (`/tools/movies`): shared “when can we actually watch” calendar. Times are always stored and shown in **America/Denver** (Mountain Time). Adding a show requires a **streaming service** (Max, Disney+, Netflix, …) plus the real available night/time — network/TVMaze listings (e.g. Food Network `8/7c` → `6:00 PM` MT) are kept as reference only and **sync does not overwrite** stream overrides. Hulu titles are tagged **Disney+** (Disney Bundle / Hulu-in-Disney+). Shows without a next episode are labeled **Not airing** and drop off the week calendar. No AI key required. Tables live on the meals Neon DB (`watching_shows` + `watching_show_streams` via migrations `007`–`009`).
+- **Movie List / Watching** (`/tools/movies`): shared “when can we actually watch” calendar, plus a **Wishlist** tab for movies to see. Times are always stored and shown in **America/Denver** (Mountain Time). Calendar times are **when you can press play on the streamer**, not cable airtime. Streaming exclusives (Netflix, Max, Disney+, …) auto-tag their service on add; broadcast/cable titles ask for a service. **Max + Food Network / cable** defaults to next-day **1:00 AM** (e.g. lists Mon 6 PM → Max Tue 1 AM). Network listings stay as reference and **sync does not overwrite** stream overrides. Hulu titles are tagged **Disney+** (Disney Bundle / Hulu-in-Disney+). Shows without a next episode are labeled **Not airing** and drop off the week calendar. Wishlist titles can be marked watched; James and Mary each leave a thumbs up/down. No AI key required. Tables live on the meals Neon DB (`watching_shows` + `watching_show_streams` via migrations `007`–`009`; `movie_wishlist` via `013`).
 - **House Projects** (`/tools/projects`): shared board for big home projects (not chores). Hierarchy is **project → sub-project → line item**. Board groups are **Backlog / Planned / In progress / Blocked / Done** with manual priority within each group; archive soft-hides a project without deleting it. Projects have an optional budget; line items carry estimate + actual (integer cents) and optional assignee (`james` | `mary`). Comments work on projects, sub-projects, and line items. No AI key required. Tables live on the meals Neon DB (`house_projects`, `house_sub_projects`, `house_line_items`, `house_project_comments` via migration `010`).
 
-On Vercel set `SUPER_ADMIN_USERS`, `APP_USERS`, `TOOLS_SESSION_SECRET`, and `MEALS_DATABASE_URL`. After deploy, run `npm run migrate:meals` if meals/watching/house-projects migrations are not applied yet.
+On Vercel set `SUPER_ADMIN_USERS`, `APP_USERS`, `TOOLS_SESSION_SECRET`, and `MEALS_DATABASE_URL`. After deploy, run `npm run migrate:meals` if meals/watching/house-projects/wishlist migrations are not applied yet.
 
 ## Rollback
 
@@ -91,6 +91,7 @@ On Vercel set `SUPER_ADMIN_USERS`, `APP_USERS`, `TOOLS_SESSION_SECRET`, and `MEA
 ## Limitations
 
 - Watching stream overrides are weekly night/time per service (not per-episode absolute drop timestamps).
+- Movie wishlist is free-text titles (no TMDB lookup yet); either person can set James or Mary’s thumbs.
 - House Projects v1 has no photos/receipts, due dates, or notifications; assignees are line-item only.
 - Login rate limiting is in-memory per server instance.
 - Arcade device-name score claims are unchanged; tools login gates access to the game, not gamertag ownership.

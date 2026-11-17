@@ -1,20 +1,26 @@
 import { redirect } from "next/navigation";
 import { ToolsChrome } from "@/components/tools/tools-chrome";
 import { AuthError, requireHouseholdContext } from "@meals/lib/auth/session";
-import { WatchingApp } from "@movies/components/watching-app";
+import { MoviesShell } from "@movies/components/movies-shell";
 import { listWatchingShows } from "@movies/lib/shows";
 import {
   HOUSEHOLD_TIMEZONE,
   shortTimezoneLabel,
 } from "@movies/lib/timezone";
+import { listWishlistItems } from "@movies/lib/wishlist";
+import { voterFromEmail } from "@movies/lib/voters";
 import { requireToolsUser } from "@/lib/tools/auth/session";
 
 export const metadata = {
-  title: "Watching — Tools",
+  title: "Movies — Tools",
   robots: { index: false, follow: false },
 };
 
-export default async function MoviesToolPage() {
+export default async function MoviesToolPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ tab?: string }>;
+}) {
   await requireToolsUser();
 
   let householdId: string;
@@ -30,12 +36,24 @@ export default async function MoviesToolPage() {
     throw e;
   }
 
-  const shows = await listWatchingShows(householdId, ["watching"]);
+  const params = searchParams ? await searchParams : undefined;
+  const initialTab = params?.tab === "wishlist" ? "wishlist" : "watching";
+
+  const [shows, wishlist] = await Promise.all([
+    listWatchingShows(householdId, ["watching"]),
+    listWishlistItems(householdId),
+  ]);
   const timezoneLabel = shortTimezoneLabel(HOUSEHOLD_TIMEZONE);
 
   return (
     <ToolsChrome email={email} activeHref="/tools/movies">
-      <WatchingApp initialShows={shows} timezoneLabel={timezoneLabel} />
+      <MoviesShell
+        initialShows={shows}
+        initialWishlist={wishlist}
+        timezoneLabel={timezoneLabel}
+        viewer={voterFromEmail(email)}
+        initialTab={initialTab}
+      />
     </ToolsChrome>
   );
 }
