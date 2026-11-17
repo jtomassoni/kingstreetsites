@@ -1,17 +1,17 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { botInput } from "@arcade/game/bot";
-import { compareOffer } from "@arcade/game/compare";
-import { weaponById } from "@arcade/game/content";
-import { dailySeed, denverDay } from "@arcade/game/daily";
-import { archetypeById } from "@arcade/game/content";
-import { buildSchedule } from "@arcade/game/generate";
-import { claimDecision, validateName } from "@arcade/game/names";
-import { destinationGate, practiceReady, defaultSave } from "@arcade/game/progress";
-import { mulberry32 } from "@arcade/game/rng";
-import { isPlausibleScore, keepBetter, multiplierFor } from "@arcade/game/score";
-import { createRun, step, timerLabel } from "@arcade/game/sim";
-import { PLAYER_R, PLAYER_Y, W, type RunState, type SpawnEvent } from "@arcade/game/types";
+import { botInput } from "../modules/arcade/game/bot";
+import { compareOffer } from "../modules/arcade/game/compare";
+import { weaponById } from "../modules/arcade/game/content";
+import { dailySeed, denverDay } from "../modules/arcade/game/daily";
+import { archetypeById } from "../modules/arcade/game/content";
+import { buildSchedule } from "../modules/arcade/game/generate";
+import { claimDecision, validateName } from "../modules/arcade/game/names";
+import { destinationGate, practiceReady, defaultSave } from "../modules/arcade/game/progress";
+import { mulberry32 } from "../modules/arcade/game/rng";
+import { isPlausibleScore, keepBetter, multiplierFor } from "../modules/arcade/game/score";
+import { createRun, step, timerLabel } from "../modules/arcade/game/sim";
+import { PLAYER_R, PLAYER_Y, W, type RunState, type SpawnEvent } from "../modules/arcade/game/types";
 
 describe("weapons tell the truth", () => {
   it("compares a pistol with a spread using the real multiplier", () => {

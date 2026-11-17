@@ -121,7 +121,7 @@ export function PlayField({
       if (cancelled) return;
       view = new Stage(canvas, hud);
       await view.load();
-      if (cancelled || !view) {
+      if (cancelled) {
         close();
         return;
       }

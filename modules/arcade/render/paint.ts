@@ -39,28 +39,29 @@ export function drawHud(
     .sort((a, b) => b.y - a.y)[0];
   if (heavy) {
     const ratio = Math.max(0, Math.min(1, heavy.hp / heavy.maxHp));
-    const barW = 200;
+    const barW = 180;
     const barX = W / 2 - barW / 2;
-    roundRect(ctx, barX - 2, 14, barW + 4, 20, 6);
+    roundRect(ctx, barX - 2, 52, barW + 4, 18, 6);
     ctx.fillStyle = INK;
     ctx.fill();
-    roundRect(ctx, barX, 16, barW * ratio, 16, 5);
+    roundRect(ctx, barX, 54, barW * ratio, 14, 5);
     ctx.fillStyle = RED;
     ctx.fill();
-    outlined(ctx, String(Math.max(0, Math.ceil(heavy.hp))), W / 2, 25, PAPER, 14, 800);
+    outlined(ctx, String(Math.max(0, Math.ceil(heavy.hp))), W / 2, 61, PAPER, 13, 800);
   }
   drawHearts(ctx, 24, 30, state.hearts);
+  // Mute/Pause sit in the top-right, so the score stays on the midline below them.
+  outlined(ctx, state.score.toLocaleString("en-US"), W / 2, 54, PAPER, 26, 800);
   const timer = timerLabel(state);
-  if (timer.text) outlined(ctx, timer.text, W / 2, 50, timer.urgent ? RED : PAPER, 22, 800);
-  outlined(ctx, state.score.toLocaleString("en-US"), W - 20, 30, PAPER, 26, 800, "right");
+  if (timer.text) outlined(ctx, timer.text, W / 2, 80, timer.urgent ? RED : PAPER, 20, 800);
   if (state.chain > 1) {
     const chain = state.multiplier > 1 ? `x${state.multiplier}` : `chain ${state.chain}`;
-    outlined(ctx, chain, W - 20, 58, CYAN, state.multiplier > 1 ? 22 : 15, 800, "right");
+    outlined(ctx, chain, W / 2 + 70, 30, CYAN, state.multiplier > 1 ? 20 : 14, 800, "left");
   }
   outlined(ctx, state.weapon.name.toUpperCase(), 20, 60, CYAN, 13, 800, "left", 0.08);
   if (state.companion) outlined(ctx, "+ BUDDY", 20, 78, CYAN, 11, 800, "left", 0.08);
   if (state.daily) outlined(ctx, "DAILY", 20, 96, AMBER, 11, 800, "left", 0.1);
-  if (state.practice) outlined(ctx, "PRACTICE", W / 2, 76, AMBER, 12, 800, "center", 0.1);
+  if (state.practice) outlined(ctx, "PRACTICE", W / 2, 100, AMBER, 12, 800, "center", 0.1);
   if (state.banner && state.bannerT > 0) {
     ctx.globalAlpha = Math.min(1, state.bannerT * 2);
     drawBanner(ctx, W / 2, 150, state.banner, state.bannerSub);
